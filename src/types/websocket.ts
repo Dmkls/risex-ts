@@ -3,12 +3,13 @@ export type WsChannel =
   | 'trades'
   | 'orders'
   | 'positions'
-  | 'funding'
-  | 'fills';
+  | 'oracle'
+  | 'ticker';
 
 export interface WsSubscription {
   channel: WsChannel;
-  market_id?: number;
+  /** Array of market IDs to subscribe to. Omit to subscribe to all markets. */
+  market_ids?: number[];
   account?: string;
 }
 

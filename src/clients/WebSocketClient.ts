@@ -130,7 +130,7 @@ export class WebSocketClient extends EventEmitter {
 
   unsubscribe(sub: WsSubscription): void {
     this.subscriptions = this.subscriptions.filter(
-      (s) => !(s.channel === sub.channel && s.market_id === sub.market_id && s.account === sub.account),
+      (s) => !(s.channel === sub.channel && JSON.stringify(s.market_ids) === JSON.stringify(sub.market_ids) && s.account === sub.account),
     );
     if (this.connected) this.sendSubscription('unsubscribe', sub);
   }
@@ -194,12 +194,16 @@ export class WebSocketClient extends EventEmitter {
       return;
     }
 
-    const payload: Record<string, unknown> = {
-      action,
+    const params: Record<string, unknown> = {
       channel: sub.channel,
     };
-    if (sub.market_id !== undefined) payload.market_id = sub.market_id;
-    if (sub.account) payload.account = sub.account;
+    if (sub.market_ids !== undefined) params.market_ids = sub.market_ids;
+    if (sub.account) params.account = sub.account;
+
+    const payload = {
+      method: action,
+      params,
+    };
 
     this.send(JSON.stringify(payload));
   }
@@ -222,7 +226,7 @@ export class WebSocketClient extends EventEmitter {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      this.send(JSON.stringify({ action: 'ping' }));
+      this.send(JSON.stringify({ op: 'ping' }));
     }, WS_HEARTBEAT_INTERVAL_MS);
   }
 

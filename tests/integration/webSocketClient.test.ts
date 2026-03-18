@@ -32,7 +32,7 @@ describe.skipIf(!RUN)('WebSocketClient integration', () => {
       return;
     }
 
-    ws.subscribe({ channel: 'orderbook', market_id: 0 });
+    ws.subscribe({ channel: 'orderbook', market_ids: [1] });
 
     // Wait up to 10 seconds for a message
     await new Promise<void>((resolve) => {
