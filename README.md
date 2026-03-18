@@ -13,7 +13,7 @@ const client = new ExchangeClient({
 await client.init();
 await client.registerSigner();
 
-const result = await client.marketBuy(1, '1000000000000000'); // 0.001 ETH
+const result = await client.marketBuy(2, '20000000000000000'); // 0.02 ETH-PERP
 console.log('Order:', result.order_id);
 ```
 
@@ -60,7 +60,7 @@ for (const m of markets) {
   console.log(`${m.display_name}: ${m.last_price}`);
 }
 
-const book = await info.getOrderbook(0); // BTC
+const book = await info.getOrderbook(1); // BTC-PERP
 console.log('Best bid:', book.bids[0]?.price);
 console.log('Best ask:', book.asks[0]?.price);
 
@@ -84,34 +84,40 @@ await client.init();
 // Idempotent — safe to call every time
 await client.registerSigner();
 
-// Place a market buy on ETH (market_id=1)
-const order = await client.marketBuy(1, '1000000000000000');
+// Place a market buy on ETH-PERP (market_id=2), minimum size 0.02
+const order = await client.marketBuy(2, '20000000000000000');
 console.log('Filled:', order.order_id, order.transaction_hash);
 
 // Check position
-const pos = await client.info.getPosition(1, client.account);
-console.log('Position:', formatWad(pos.size), pos.side === 0 ? 'Long' : 'Short');
+const pos = await client.info.getPosition(2, client.account);
+if (pos) {
+  console.log('Position:', formatWad(pos.size), pos.side === 0 ? 'Long' : 'Short');
+}
 
 // Close it
-await client.closePosition(1);
+await client.closePosition(2);
 ```
 
 ### WebSocket: stream orderbook updates
 
 ```ts
-import { WebSocketClient } from 'risex-ts';
+import { WebSocketClient, formatWad } from 'risex-ts';
 
 const ws = new WebSocketClient();
 
 ws.onChannel('orderbook', (msg) => {
-  const { bids, asks } = msg.data;
-  console.log('Top bid:', bids?.[0], 'Top ask:', asks?.[0]);
+  const data = msg.data as {
+    bids?: Array<{ price: string; quantity: string }>;
+    asks?: Array<{ price: string; quantity: string }>;
+  };
+  if (data.bids?.[0]) console.log('Top bid:', formatWad(data.bids[0].price));
+  if (data.asks?.[0]) console.log('Top ask:', formatWad(data.asks[0].price));
 });
 
 await ws.connect();
-ws.subscribe({ channel: 'orderbook', market_id: 0 });
+ws.subscribe({ channel: 'orderbook', market_ids: [1] }); // BTC-PERP
 
-// Channels: 'orderbook' | 'trades' | 'orders' | 'positions' | 'funding' | 'fills'
+// Channels: 'orderbook' | 'trades' | 'orders' | 'positions' | 'oracle' | 'ticker'
 ```
 
 ## API
@@ -129,6 +135,8 @@ const info = new InfoClient(options?)
 | `baseUrl` | `string` | `https://api.testnet.rise.trade` |
 | `timeout` | `number` | `30000` |
 | `logLevel` | `'debug' \| 'info' \| 'warn' \| 'error' \| 'none'` | `'warn'` |
+
+These options are shared by `ExchangeClient` and `WebSocketClient`. The `WebSocketClient` also accepts `wsUrl` (default: `wss://ws.testnet.rise.trade/ws`).
 
 #### Markets
 
@@ -234,8 +242,8 @@ Extends `EventEmitter`. Auto-reconnects with exponential backoff.
 const ws = new WebSocketClient(options?)
 
 await ws.connect()
-ws.subscribe({ channel, market_id?, account? })
-ws.unsubscribe({ channel, market_id?, account? })
+ws.subscribe({ channel, market_ids?, account? })
+ws.unsubscribe({ channel, market_ids?, account? })
 ws.disconnect()
 ```
 
@@ -249,7 +257,7 @@ ws.disconnect()
 | `ws.offChannel(channel, handler)` | Remove a channel handler. |
 | `WebSocketClient.orderbookChecksum(bids, asks)` | Static CRC32 checksum for orderbook validation. |
 
-**Channels:** `'orderbook'` `'trades'` `'orders'` `'positions'` `'funding'` `'fills'`
+**Channels:** `'orderbook'` `'trades'` `'orders'` `'positions'` `'oracle'` `'ticker'`
 
 ---
 
@@ -285,7 +293,7 @@ MarginMode.Isolated // 1
 import { RiseApiError, RiseSigningError, RiseRateLimitError } from 'risex-ts';
 
 try {
-  await client.marketBuy(1, '1000000000000000');
+  await client.marketBuy(2, '20000000000000000');
 } catch (err) {
   if (err instanceof RiseApiError) {
     console.log(err.status, err.path, err.message);
@@ -323,7 +331,8 @@ import {
 - **Rate limiting is automatic** — the client will wait (not throw) when the rate limit is approached. If you exhaust the bucket entirely, `RiseRateLimitError` is thrown.
 - **Deposit amount is plain decimal** — `deposit('100')` deposits 100 USDC, not a wad value.
 - **All timestamps from the API are in nanoseconds** unless documented otherwise.
-- **WebSocket URL** — the default WS endpoint may not be available on all environments. Pass `wsUrl` in options to override.
+- **WebSocket subscriptions use `market_ids`** — pass an array of market IDs (e.g. `[1, 2]`). Omit to subscribe to all markets.
+- **WebSocket URL** — defaults to `wss://ws.testnet.rise.trade/ws`. Pass `wsUrl` in options to override for mainnet or custom environments.
 
 ## Compatibility
 
@@ -363,16 +372,16 @@ The SDK handles rate limiting automatically by waiting. If you see `RiseRateLimi
 
 ### WebSocket won't connect
 
-The WS endpoint may not be available in all environments. Pass a custom URL:
+The default WS endpoint is `wss://ws.testnet.rise.trade/ws`. Pass a custom URL if needed:
 
 ```ts
-const ws = new WebSocketClient({ wsUrl: 'wss://your-ws-endpoint' });
+const ws = new WebSocketClient({ wsUrl: 'wss://ws.risex.trade/ws' });
 ```
 
 ## Contributing
 
 ```bash
-git clone https://github.com/yourorg/risex-ts
+git clone https://github.com/SmoothBot/risex-ts
 cd risex-ts
 npm install
 npm test              # unit tests
