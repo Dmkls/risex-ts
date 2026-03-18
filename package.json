@@ -1,0 +1,68 @@
+{
+  "name": "risex-ts",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the RISEx perpetuals DEX on RISE Chain",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.mjs",
+  "types": "./dist/esm/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.mts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "RUN_INTEGRATION=true vitest run tests/integration/",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "risex",
+    "rise",
+    "dex",
+    "perpetuals",
+    "trading",
+    "ethereum",
+    "l2",
+    "eip712",
+    "typescript"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/SmoothBot/risex-ts#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SmoothBot/risex-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SmoothBot/risex-ts/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "ethers": "^6.13.5",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/ws": "^8.18.1",
+    "dotenv": "^16.4.7",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.0"
+  }
+}
