@@ -1,5 +1,5 @@
 export const DEFAULT_BASE_URL = 'https://api.testnet.rise.trade';
-export const DEFAULT_WS_URL = 'wss://api.testnet.rise.trade/ws';
+export const DEFAULT_WS_URL = 'wss://ws.testnet.rise.trade/ws';
 
 export const REST_RATE_LIMIT = 500;
 export const REST_RATE_WINDOW_MS = 10_000;

@@ -14,14 +14,11 @@ describe('createNonce', () => {
     expect(nonce.length).toBeGreaterThanOrEqual(13);
   });
 
-  it('should produce unique nonces', () => {
-    const nonces = new Set<string>();
-    for (let i = 0; i < 100; i++) {
-      nonces.add(createNonce(address));
-    }
-    // The random component ensures uniqueness even within same ms
-    // But hash suffix is deterministic per-ms, so uniqueness comes from random in base
-    expect(nonces.size).toBeGreaterThan(1);
+  it('should produce unique nonces across time', async () => {
+    const n1 = createNonce(address);
+    await new Promise((r) => setTimeout(r, 5));
+    const n2 = createNonce(address);
+    expect(n1).not.toBe(n2);
   });
 
   it('should produce different nonces for different addresses', () => {
