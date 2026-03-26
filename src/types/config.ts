@@ -44,8 +44,10 @@ export interface ClientOptions {
 }
 
 export interface ExchangeClientOptions extends ClientOptions {
-  /** Main wallet private key (hex, with or without 0x prefix) */
-  accountKey: string;
+  /** Account address (hex). Required unless accountKey is provided. */
+  account?: string;
+  /** Main wallet private key (hex, with or without 0x prefix). Only needed to register/revoke signers programmatically. */
+  accountKey?: string;
   /** Signer/session key private key (hex, with or without 0x prefix) */
   signerKey: string;
 }

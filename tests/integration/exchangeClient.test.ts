@@ -8,8 +8,9 @@ describe.skipIf(!RUN)('ExchangeClient integration', () => {
   let client: ExchangeClient;
 
   beforeAll(async () => {
+    // Default flow: account address + signer key
     client = new ExchangeClient({
-      accountKey: process.env.ACCOUNT_PRIVATE_KEY!,
+      account: process.env.ACCOUNT_ADDRESS!,
       signerKey: process.env.SIGNER_PRIVATE_KEY!,
       baseUrl: process.env.API_URL,
     });
@@ -32,8 +33,19 @@ describe.skipIf(!RUN)('ExchangeClient integration', () => {
     expect(typeof registered).toBe('boolean');
   });
 
-  it('should register signer (idempotent)', async () => {
-    const result = await client.registerSigner();
+  it('should throw when calling registerSigner without accountKey', async () => {
+    await expect(() => client.registerSigner()).rejects.toThrow('accountKey is required');
+  });
+
+  it('should allow registerSigner when accountKey is provided', async () => {
+    if (!process.env.ACCOUNT_PRIVATE_KEY) return;
+    const fullClient = new ExchangeClient({
+      accountKey: process.env.ACCOUNT_PRIVATE_KEY!,
+      signerKey: process.env.SIGNER_PRIVATE_KEY!,
+      baseUrl: process.env.API_URL,
+    });
+    await fullClient.init();
+    const result = await fullClient.registerSigner();
     expect(result).toBeDefined();
   });
 
@@ -42,7 +54,6 @@ describe.skipIf(!RUN)('ExchangeClient integration', () => {
       const balance = await client.info.getBalance(client.account);
       expect(balance).toBeDefined();
     } catch (err: any) {
-      // Account may not exist on staging — 500 with "execution reverted" is expected
       expect(err.status).toBe(500);
     }
   });

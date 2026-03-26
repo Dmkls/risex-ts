@@ -2,8 +2,10 @@ import 'dotenv/config';
 import { ExchangeClient } from '../src/index.js';
 
 async function main() {
+  // Default flow: signer was created via RISEx web app
+  // Only need account address + signer private key
   const client = new ExchangeClient({
-    accountKey: process.env.ACCOUNT_PRIVATE_KEY!,
+    account: process.env.ACCOUNT_ADDRESS!,
     signerKey: process.env.SIGNER_PRIVATE_KEY!,
     baseUrl: process.env.API_URL,
   });
@@ -14,9 +16,8 @@ async function main() {
   // Initialize (fetches EIP-712 domain + contract addresses)
   await client.init();
 
-  // Register signer (idempotent)
-  await client.registerSigner();
-  console.log('Signer registered');
+  // Signer should already be registered via the web app
+  console.log('Signer active:', await client.isSignerRegistered());
 
   // Fetch markets
   const markets = await client.info.getMarkets();
@@ -25,7 +26,6 @@ async function main() {
   if (!market) throw new Error('No visible market');
 
   const marketId = Number(market.market_id);
-  // min_order_size is now a decimal string (e.g. "0.000001")
   const stepSize = parseFloat(market.config.step_size);
   const minSize = parseFloat(market.config.min_order_size);
   const minSteps = Math.max(1, Math.ceil(minSize / stepSize));

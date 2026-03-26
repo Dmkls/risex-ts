@@ -11,7 +11,7 @@ import type { PermitParams, NonceState, RegisterSignerResult } from '../types/au
 export class ExchangeClient {
   public readonly info: InfoClient;
 
-  private readonly accountWallet: ethers.Wallet;
+  private readonly accountWallet: ethers.Wallet | null;
   private readonly signerWallet: ethers.Wallet;
   private domain!: Eip712Domain;
   private target!: string;
@@ -21,11 +21,21 @@ export class ExchangeClient {
   public readonly signer: string;
 
   constructor(opts: ExchangeClientOptions) {
+    if (!opts.account && !opts.accountKey) {
+      throw new Error('Either account (address) or accountKey (private key) must be provided.');
+    }
+
     this.info = new InfoClient(opts);
-    this.accountWallet = new ethers.Wallet(opts.accountKey);
     this.signerWallet = new ethers.Wallet(opts.signerKey);
-    this.account = this.accountWallet.address;
     this.signer = this.signerWallet.address;
+
+    if (opts.accountKey) {
+      this.accountWallet = new ethers.Wallet(opts.accountKey);
+      this.account = this.accountWallet.address;
+    } else {
+      this.accountWallet = null;
+      this.account = opts.account!;
+    }
   }
 
   /**
@@ -36,7 +46,6 @@ export class ExchangeClient {
     this.domain = await this.info.getEip712Domain();
 
     const config = await this.info.getSystemConfig();
-    // Staging uses router as target; fall back to older config shapes
     this.target =
       config.addresses?.router as string ??
       config.addresses?.perp_v2?.orders_manager as string ??
@@ -51,6 +60,15 @@ export class ExchangeClient {
     if (!this.initialized) throw new Error('ExchangeClient not initialized. Call init() first.');
   }
 
+  private assertAccountKey(): void {
+    if (!this.accountWallet) {
+      throw new Error(
+        'accountKey is required for this operation. ' +
+        'Provide accountKey in ExchangeClientOptions, or register your signer via the RISEx web app.',
+      );
+    }
+  }
+
   /** Fetch current nonce state for this account. */
   async getNonceState(): Promise<NonceState> {
     return this.info.getNonceState(this.account);
@@ -63,14 +81,19 @@ export class ExchangeClient {
     return res.status === 1;
   }
 
+  /**
+   * Register the signer key on-chain.
+   * Requires accountKey — if your signer was created via the RISEx web app, this is not needed.
+   */
   async registerSigner(label = 'risex-ts'): Promise<RegisterSignerResult> {
     this.assertInit();
+    this.assertAccountKey();
     if (await this.isSignerRegistered()) return { alreadyActive: true };
 
     const nonceState = await this.getNonceState();
 
     const sigs = await createRegisterSignerSignatures(
-      this.accountWallet,
+      this.accountWallet!,
       this.signerWallet,
       this.domain,
       nonceState,
@@ -89,11 +112,16 @@ export class ExchangeClient {
     });
   }
 
+  /**
+   * Revoke a signer key on-chain.
+   * Requires accountKey.
+   */
   async revokeSigner(signerAddress?: string): Promise<unknown> {
     this.assertInit();
+    this.assertAccountKey();
     const nonceState = await this.getNonceState();
     const sigs = await createRegisterSignerSignatures(
-      this.accountWallet,
+      this.accountWallet!,
       this.signerWallet,
       this.domain,
       nonceState,
@@ -241,9 +269,7 @@ export class ExchangeClient {
     const pos = await this.info.getPosition(marketId, this.account);
     if (!pos || pos.size === '0') return null;
 
-    // Convert position size to steps — position size is decimal string
     const absSize = parseFloat(pos.size) < 0 ? -parseFloat(pos.size) : parseFloat(pos.size);
-    // Get market config for step_size to convert
     const markets = await this.info.getMarkets();
     const market = markets.find((m) => String(m.market_id) === String(marketId));
     const stepSize = market ? parseFloat(market.config.step_size) : 0.000001;
