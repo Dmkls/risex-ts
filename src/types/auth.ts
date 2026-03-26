@@ -1,9 +1,15 @@
 export interface PermitParams {
   account: string;
   signer: string;
-  nonce: string;
-  deadline: string;
+  nonce_anchor: number;
+  nonce_bitmap_index: number;
+  deadline: number;
   signature: string;
+}
+
+export interface NonceState {
+  nonce_anchor: string;
+  current_bitmap_index: number;
 }
 
 export interface SignerInfo {

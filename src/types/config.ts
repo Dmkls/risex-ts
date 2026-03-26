@@ -7,6 +7,13 @@ export interface Eip712Domain {
 
 export interface SystemConfig {
   addresses: {
+    router?: string;
+    auth?: string;
+    orders_manager?: string;
+    perps_manager?: string;
+    collateral_manager?: string;
+    usdc?: string;
+    deposit?: string;
     perp_v2?: {
       orders_manager?: string;
       [key: string]: unknown;
@@ -26,9 +33,9 @@ export interface SystemConfig {
 }
 
 export interface ClientOptions {
-  /** API base URL (default: testnet) */
+  /** API base URL (default: staging) */
   baseUrl?: string;
-  /** WebSocket URL (default: testnet) */
+  /** WebSocket URL (default: staging) */
   wsUrl?: string;
   /** Request timeout in ms (default: 30000) */
   timeout?: number;

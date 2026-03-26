@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { WebSocketClient, formatWad } from '../src/index.js';
+import { WebSocketClient } from '../src/index.js';
 import type { WsMessage } from '../src/index.js';
 
 async function main() {
@@ -13,6 +13,7 @@ async function main() {
   ws.on('error', (err) => console.error('Error:', err));
 
   // Subscribe to orderbook for BTC (market_id=1)
+  // Prices are now decimal strings (not wei)
   ws.onChannel('orderbook', (msg: WsMessage) => {
     const data = msg.data as {
       bids?: Array<{ price: string; quantity: string }>;
@@ -21,7 +22,7 @@ async function main() {
     const topBid = data.bids?.[0];
     const topAsk = data.asks?.[0];
     console.log(
-      `Orderbook | Bid: ${topBid ? `${formatWad(topBid.price)} x ${formatWad(topBid.quantity)}` : '-'} | Ask: ${topAsk ? `${formatWad(topAsk.price)} x ${formatWad(topAsk.quantity)}` : '-'}`,
+      `Orderbook | Bid: ${topBid ? `${topBid.price} x ${topBid.quantity}` : '-'} | Ask: ${topAsk ? `${topAsk.price} x ${topAsk.quantity}` : '-'}`,
     );
   });
 

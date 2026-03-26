@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
 import { REGISTER_SIGNER_TYPES, VERIFY_SIGNER_TYPES, REGISTER_SIGNER_MESSAGE } from './domain.js';
-import { createNonce } from './nonce.js';
 import { DEFAULT_SIGNER_EXPIRY_SECONDS } from '../utils/constants.js';
 import type { Eip712Domain } from '../types/config.js';
+import type { NonceState } from '../types/auth.js';
 
 /**
  * Fix EIP-712 signature V value.
@@ -14,10 +14,20 @@ export function fixSignatureV(sig: string): string {
   return ethers.hexlify(bytes);
 }
 
+/**
+ * Convert a hex signature string to base64.
+ */
+function hexToBase64(hex: string): string {
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const bytes = Buffer.from(clean, 'hex');
+  return bytes.toString('base64');
+}
+
 export interface RegisterSignerSignatures {
   accountSignature: string;
   signerSignature: string;
-  nonce: string;
+  nonceAnchor: number;
+  nonceBitmapIndex: number;
   expiration: number;
   message: string;
 }
@@ -29,9 +39,9 @@ export async function createRegisterSignerSignatures(
   accountWallet: ethers.Wallet,
   signerWallet: ethers.Wallet,
   domain: Eip712Domain,
+  nonceState: NonceState,
   expirationSeconds?: number,
 ): Promise<RegisterSignerSignatures> {
-  const nonce = createNonce(accountWallet.address);
   const expiration = Math.floor(Date.now() / 1000) + (expirationSeconds ?? DEFAULT_SIGNER_EXPIRY_SECONDS);
   const message = REGISTER_SIGNER_MESSAGE;
 
@@ -44,19 +54,29 @@ export async function createRegisterSignerSignatures(
 
   const accountSignature = fixSignatureV(
     await accountWallet.signTypedData(ethDomain, REGISTER_SIGNER_TYPES, {
+      account: accountWallet.address,
       signer: signerWallet.address,
       message,
       expiration,
-      nonce,
+      nonceAnchor: nonceState.nonce_anchor,
+      nonceBitmap: nonceState.current_bitmap_index,
     }),
   );
 
   const signerSignature = fixSignatureV(
     await signerWallet.signTypedData(ethDomain, VERIFY_SIGNER_TYPES, {
       account: accountWallet.address,
-      nonce,
+      nonceAnchor: nonceState.nonce_anchor,
+      nonceBitmap: nonceState.current_bitmap_index,
     }),
   );
 
-  return { accountSignature, signerSignature, nonce, expiration, message };
+  return {
+    accountSignature: hexToBase64(accountSignature),
+    signerSignature: hexToBase64(signerSignature),
+    nonceAnchor: Number(nonceState.nonce_anchor),
+    nonceBitmapIndex: nonceState.current_bitmap_index,
+    expiration,
+    message,
+  };
 }

@@ -2,9 +2,9 @@ import { HttpClient } from '../core/HttpClient.js';
 import { DEFAULT_BASE_URL } from '../utils/constants.js';
 import type { ClientOptions, SystemConfig, Eip712Domain } from '../types/config.js';
 import type { Market, Orderbook, Trade, Candle, FundingRate } from '../types/market.js';
-import type { Balance, Equity, Position, FundingPayment, Transfer, RealizedPnl } from '../types/account.js';
+import type { Balance, Position, FundingPayment, Transfer, RealizedPnl } from '../types/account.js';
 import type { OpenOrder, OrderHistoryEntry, Fill } from '../types/order.js';
-import type { SessionKeyStatus, SignerInfo } from '../types/auth.js';
+import type { SessionKeyStatus, SignerInfo, NonceState } from '../types/auth.js';
 
 export class InfoClient {
   protected readonly http: HttpClient;
@@ -33,6 +33,10 @@ export class InfoClient {
     };
   }
 
+  async getNonceState(account: string): Promise<NonceState> {
+    return this.http.get<NonceState>(`/v1/nonce-state/${account}`);
+  }
+
   // ── Markets ─────────────────────────────────────────────
 
   async getMarkets(): Promise<Market[]> {
@@ -46,7 +50,7 @@ export class InfoClient {
 
   async getTradeHistory(marketId: number, limit = 50): Promise<Trade[]> {
     const data = await this.http.get<{ trades: Trade[] }>(
-      `/v1/markets/trade-history?market_id=${marketId}&limit=${limit}`,
+      `/v1/trade-history?market_id=${marketId}&limit=${limit}`,
     );
     return data.trades ?? (data as unknown as Trade[]);
   }
@@ -73,11 +77,6 @@ export class InfoClient {
     return data.balance;
   }
 
-  async getEquity(account: string): Promise<string> {
-    const data = await this.http.get<Equity>(`/v1/account/equity?account=${account}`);
-    return data.equity;
-  }
-
   async getPosition(marketId: number, account: string): Promise<Position | null> {
     const data = await this.http.get<{ position: Position }>(
       `/v1/account/position?market_id=${marketId}&account=${account}`,
@@ -87,7 +86,7 @@ export class InfoClient {
 
   async getAllPositions(account: string): Promise<Position[]> {
     const data = await this.http.get<{ positions: Position[] }>(
-      `/v1/account/positions?account=${account}`,
+      `/v1/positions?account=${account}`,
     );
     return data.positions ?? [];
   }
@@ -100,14 +99,14 @@ export class InfoClient {
   }
 
   async getOrderHistory(account: string, marketId?: number, limit = 50): Promise<OrderHistoryEntry[]> {
-    let path = `/v1/orders/history?account=${account}&limit=${limit}`;
+    let path = `/v1/orders?account=${account}&limit=${limit}`;
     if (marketId !== undefined) path += `&market_id=${marketId}`;
     const data = await this.http.get<{ orders: OrderHistoryEntry[] }>(path);
     return data.orders ?? [];
   }
 
   async getAccountTradeHistory(account: string, marketId?: number, limit = 50): Promise<Fill[]> {
-    let path = `/v1/markets/account-trade-history?account=${account}&limit=${limit}`;
+    let path = `/v1/trade-history?account=${account}&limit=${limit}`;
     if (marketId !== undefined) path += `&market_id=${marketId}`;
     const data = await this.http.get<{ fills?: Fill[]; trades?: Fill[] }>(path);
     return data.fills ?? data.trades ?? [];
@@ -115,7 +114,7 @@ export class InfoClient {
 
   async getFundingPaymentHistory(account: string, limit = 50): Promise<FundingPayment[]> {
     const data = await this.http.get<{ payments: FundingPayment[] }>(
-      `/v1/account/funding-payment-history?account=${account}&limit=${limit}`,
+      `/v1/account/funding-payments?account=${account}&limit=${limit}`,
     );
     return data.payments ?? [];
   }

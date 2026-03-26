@@ -1,25 +1,27 @@
 import type { Side, OrderType, TimeInForce, StpMode } from './common.js';
 
 export interface OrderParams {
-  market_id: string;
-  size: string;
-  price: string;
+  market_id: number;
   side: Side;
   order_type: OrderType;
-  tif: TimeInForce;
+  price_ticks: number;
+  size_steps: number;
+  time_in_force: TimeInForce;
   post_only: boolean;
   reduce_only: boolean;
   stp_mode: StpMode;
-  expiry: number;
+  ttl_units: number;
+  client_order_id?: string;
+  builder_id?: number;
 }
 
 export interface CancelParams {
-  market_id: string;
+  market_id: number;
   order_id: string;
 }
 
 export interface TpSlParams {
-  market_id: string;
+  market_id: number;
   take_profit_price?: string;
   stop_loss_price?: string;
   take_profit_order_type?: OrderType;
@@ -29,25 +31,44 @@ export interface TpSlParams {
 
 export interface OrderResponse {
   order_id: string;
-  transaction_hash: string;
+  sc_order_id: string;
+  tx_hash: string;
+  [key: string]: unknown;
+}
+
+export interface CancelResponse {
+  success: boolean;
+  tx_hash: string;
+  [key: string]: unknown;
+}
+
+export interface CancelAllResponse {
+  success: boolean;
+  tx_hash: string;
+  block_number?: string;
   [key: string]: unknown;
 }
 
 export interface OpenOrder {
   order_id: string;
-  market_id: string;
+  wide_order_id?: string;
+  resting_order_id?: string;
+  account: string;
+  market_id: number;
   side: number;
-  size: string;
-  price: string;
-  filled_size?: string;
   order_type: number;
-  status: string;
-  timestamp: string;
+  price_ticks: number;
+  size_steps: number;
+  time_in_force: number;
+  post_only: boolean;
+  reduce_only: boolean;
   [key: string]: unknown;
 }
 
 export interface OrderHistoryEntry {
   order_id: string;
+  wide_order_id?: string;
+  resting_order_id?: string;
   market_id: string;
   side: number;
   size: string;
