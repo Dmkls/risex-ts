@@ -2,8 +2,7 @@ import 'dotenv/config';
 import { ExchangeClient } from '../src/index.js';
 
 async function main() {
-  // Default flow: signer was created via RISEx web app
-  // Only need account address + signer private key
+  // Create API Key via the web app
   const client = new ExchangeClient({
     account: process.env.ACCOUNT_ADDRESS!,
     signerKey: process.env.SIGNER_PRIVATE_KEY!,
@@ -16,7 +15,7 @@ async function main() {
   // Initialize (fetches EIP-712 domain + contract addresses)
   await client.init();
 
-  // Signer should already be registered via the web app
+  // Signer should already be registered
   console.log('Signer active:', await client.isSignerRegistered());
 
   // Fetch markets
