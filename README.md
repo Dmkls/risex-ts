@@ -3,18 +3,17 @@
 TypeScript SDK for [RISEx](https://rise.trade), a fully onchain CLOB perpetuals DEX on RISE Chain (Ethereum L2).
 
 ```ts
-import { ExchangeClient, formatWad } from 'risex-ts';
+import { ExchangeClient } from 'risex-ts';
 
 const client = new ExchangeClient({
-  accountKey: process.env.ACCOUNT_PRIVATE_KEY,
+  account: process.env.ACCOUNT_ADDRESS,
   signerKey: process.env.SIGNER_PRIVATE_KEY,
 });
 
 await client.init();
-await client.registerSigner();
 
-const result = await client.marketBuy(2, '20000000000000000'); // 0.02 ETH-PERP
-console.log('Order:', result.order_id);
+const order = await client.marketBuy(2, 1); // 1 step of ETH-PERP
+console.log('Order:', order.order_id, 'tx:', order.tx_hash);
 ```
 
 ## Install
@@ -25,23 +24,23 @@ npm install risex-ts
 
 Requires **Node 18+**. No peer dependencies.
 
-### Environment variables
+### Setup
+
+1. Go to the [RISEx web app](https://rise.trade) and create an API signer key under **Settings > API Keys**
+2. Set your environment variables:
 
 ```bash
-# Your main wallet private key (hex, with or without 0x)
-ACCOUNT_PRIVATE_KEY=0x...
+# Your wallet address
+ACCOUNT_ADDRESS=0x...
 
-# Signer/session key for trading
+# API signer private key (from the web app)
 SIGNER_PRIVATE_KEY=0x...
-
-# Optional: override API base URL (default: testnet)
-API_URL=https://api.testnet.rise.trade
 ```
 
 ## Why use this?
 
 - **Two clients, clean separation** — `InfoClient` for public reads, `ExchangeClient` for authenticated writes
-- **Signing handled for you** — EIP-712 order encoding, nonce generation, and signer registration all built in
+- **Signing handled for you** — EIP-712 order encoding, bitmap nonces, and permit signing all built in
 - **Dual ESM/CJS** — works in any Node.js project
 - **Rate limiting included** — token bucket (500 req/10s REST, 10 req/s WS) so you don't get throttled
 - **WebSocket with auto-reconnect** — orderbook, trades, and user data streams
@@ -51,7 +50,7 @@ API_URL=https://api.testnet.rise.trade
 ### Read-only: fetch markets and orderbook
 
 ```ts
-import { InfoClient, formatWad } from 'risex-ts';
+import { InfoClient } from 'risex-ts';
 
 const info = new InfoClient();
 
@@ -63,35 +62,29 @@ for (const m of markets) {
 const book = await info.getOrderbook(1); // BTC-PERP
 console.log('Best bid:', book.bids[0]?.price);
 console.log('Best ask:', book.asks[0]?.price);
-
-const balance = await info.getBalance('0xYourAddress');
-console.log('Balance:', formatWad(balance), 'USDC');
 ```
 
 ### Trading: place and close a position
 
 ```ts
-import { ExchangeClient, formatWad } from 'risex-ts';
+import { ExchangeClient } from 'risex-ts';
 
 const client = new ExchangeClient({
-  accountKey: process.env.ACCOUNT_PRIVATE_KEY,
+  account: process.env.ACCOUNT_ADDRESS,
   signerKey: process.env.SIGNER_PRIVATE_KEY,
 });
 
 // Required: fetches EIP-712 domain and contract addresses
 await client.init();
 
-// Idempotent — safe to call every time
-await client.registerSigner();
-
-// Place a market buy on ETH-PERP (market_id=2), minimum size 0.02
-const order = await client.marketBuy(2, '20000000000000000');
-console.log('Filled:', order.order_id, order.transaction_hash);
+// Place a market buy on ETH-PERP (market_id=2), 1 step = 0.001 ETH
+const order = await client.marketBuy(2, 1);
+console.log('Filled:', order.order_id, 'tx:', order.tx_hash);
 
 // Check position
 const pos = await client.info.getPosition(2, client.account);
 if (pos) {
-  console.log('Position:', formatWad(pos.size), pos.side === 0 ? 'Long' : 'Short');
+  console.log('Position:', pos.size, pos.side === 0 ? 'Long' : 'Short');
 }
 
 // Close it
@@ -101,7 +94,7 @@ await client.closePosition(2);
 ### WebSocket: stream orderbook updates
 
 ```ts
-import { WebSocketClient, formatWad } from 'risex-ts';
+import { WebSocketClient } from 'risex-ts';
 
 const ws = new WebSocketClient();
 
@@ -110,8 +103,8 @@ ws.onChannel('orderbook', (msg) => {
     bids?: Array<{ price: string; quantity: string }>;
     asks?: Array<{ price: string; quantity: string }>;
   };
-  if (data.bids?.[0]) console.log('Top bid:', formatWad(data.bids[0].price));
-  if (data.asks?.[0]) console.log('Top ask:', formatWad(data.asks[0].price));
+  if (data.bids?.[0]) console.log('Top bid:', data.bids[0].price);
+  if (data.asks?.[0]) console.log('Top ask:', data.asks[0].price);
 });
 
 await ws.connect();
@@ -132,11 +125,11 @@ const info = new InfoClient(options?)
 
 | Option | Type | Default |
 |--------|------|---------|
-| `baseUrl` | `string` | `https://api.testnet.rise.trade` |
+| `baseUrl` | `string` | `https://api.staging.rise.trade` |
 | `timeout` | `number` | `30000` |
 | `logLevel` | `'debug' \| 'info' \| 'warn' \| 'error' \| 'none'` | `'warn'` |
 
-These options are shared by `ExchangeClient` and `WebSocketClient`. The `WebSocketClient` also accepts `wsUrl` (default: `wss://ws.testnet.rise.trade/ws`).
+These options are shared by `ExchangeClient` and `WebSocketClient`. The `WebSocketClient` also accepts `wsUrl` (default: `wss://ws.staging.rise.trade/ws`).
 
 #### Markets
 
@@ -152,8 +145,7 @@ These options are shared by `ExchangeClient` and `WebSocketClient`. The `WebSock
 
 | Method | Returns |
 |--------|---------|
-| `getBalance(account)` | `string` (wad) |
-| `getEquity(account)` | `string` (wad) |
+| `getBalance(account)` | `string` |
 | `getPosition(marketId, account)` | `Position \| null` |
 | `getAllPositions(account)` | `Position[]` |
 | `getOpenOrders(account, marketId?)` | `OpenOrder[]` |
@@ -162,6 +154,7 @@ These options are shared by `ExchangeClient` and `WebSocketClient`. The `WebSock
 | `getFundingPaymentHistory(account, limit?)` | `FundingPayment[]` |
 | `getTransferHistory(account, limit?)` | `Transfer[]` |
 | `getRealizedPnl(account)` | `RealizedPnl` |
+| `getNonceState(account)` | `NonceState` |
 
 #### System
 
@@ -180,46 +173,46 @@ Authenticated client for trading. Holds an `InfoClient` at `client.info`.
 
 ```ts
 const client = new ExchangeClient({
-  accountKey: '0x...',   // main wallet private key
-  signerKey: '0x...',    // session/signer private key
-  baseUrl?: string,
-  timeout?: number,
-  logLevel?: LogLevel,
+  account: '0x...',    // your wallet address
+  signerKey: '0x...',  // API signer private key (from web app)
 })
 
 await client.init()  // required before any authenticated call
 ```
 
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `account` | `string` | Yes* | Your wallet address |
+| `signerKey` | `string` | Yes | API signer private key |
+| `accountKey` | `string` | No | Wallet private key (only for programmatic signer registration) |
+| `baseUrl` | `string` | No | API base URL |
+
+*Either `account` or `accountKey` must be provided. If `accountKey` is given, `account` is derived from it.
+
 **Properties:**
-- `client.account` — main wallet address
+- `client.account` — wallet address
 - `client.signer` — signer address
 - `client.info` — the underlying `InfoClient`
-
-#### Auth
-
-| Method | Description |
-|--------|-------------|
-| `registerSigner(label?)` | Register the signer key (idempotent). Returns `{ alreadyActive: true }` if already registered. |
-| `isSignerRegistered()` | Check if signer is active. |
-| `revokeSigner(address?)` | Revoke a signer. |
 
 #### Orders
 
 | Method | Description |
 |--------|-------------|
-| `placeOrder(params)` | Place an order with full `OrderParams`. Returns `{ order_id, transaction_hash }`. |
+| `placeOrder(params)` | Place an order with full `OrderParams`. Returns `{ order_id, sc_order_id, tx_hash }`. |
 | `cancelOrder({ market_id, order_id })` | Cancel a specific order. |
-| `cancelAllOrders(marketId?)` | Cancel all open orders (optionally filtered by market). |
+| `cancelAllOrders(marketId?)` | Cancel all open orders. Pass `0` or omit for all markets. |
 
 #### Convenience methods
 
 | Method | Description |
 |--------|-------------|
-| `marketBuy(marketId, size)` | Market buy. Size as bigint or string (wad). |
-| `marketSell(marketId, size, reduceOnly?)` | Market sell. |
-| `limitBuy(marketId, size, price, postOnly?)` | Limit buy. |
-| `limitSell(marketId, size, price, postOnly?)` | Limit sell. |
+| `marketBuy(marketId, sizeSteps)` | Market buy. Size in steps (integer). |
+| `marketSell(marketId, sizeSteps, reduceOnly?)` | Market sell. |
+| `limitBuy(marketId, sizeSteps, priceTicks, postOnly?)` | Limit buy. |
+| `limitSell(marketId, sizeSteps, priceTicks, postOnly?)` | Limit sell. |
 | `closePosition(marketId)` | Close entire position. Returns `null` if no position. |
+
+**Price and size** use ticks/steps (compact integers), not WAD. Check `market.config.step_price` and `market.config.step_size` for the conversion factor.
 
 #### Account management
 
@@ -229,8 +222,16 @@ await client.init()  // required before any authenticated call
 | `updateLeverage(marketId, leverage)` | Set leverage (wad bigint, e.g. `parseWad("10")` for 10x). |
 | `updateMarginMode(marketId, mode)` | Set `MarginMode.Cross` or `MarginMode.Isolated`. |
 | `updateIsolatedMargin(marketId, amount)` | Add/remove isolated margin (positive to add, negative to remove). |
-| `placeTpSlOrder(params)` | Place take-profit/stop-loss order. |
-| `cancelTpSlOrder(params)` | Cancel a TP/SL order. |
+
+#### Auth
+
+| Method | Description |
+|--------|-------------|
+| `isSignerRegistered()` | Check if signer is active. |
+| `registerSigner(label?)` | Register a signer on-chain. **Requires `accountKey`.** |
+| `revokeSigner(address?)` | Revoke a signer. **Requires `accountKey`.** |
+
+`registerSigner` and `revokeSigner` require the `accountKey` option since they need the wallet's private key to sign the on-chain registration. Most users should create their signer via the RISEx web app instead.
 
 ---
 
@@ -261,16 +262,6 @@ ws.disconnect()
 
 ---
 
-### Utilities
-
-```ts
-import { formatWad, parseWad, parseWadString } from 'risex-ts';
-
-formatWad('1000000000000000000')  // '1.0'
-parseWad('1.5')                   // 1500000000000000000n
-parseWadString('1.5')             // '1500000000000000000'
-```
-
 ### Enums
 
 ```ts
@@ -290,10 +281,10 @@ MarginMode.Isolated // 1
 ### Errors
 
 ```ts
-import { RiseApiError, RiseSigningError, RiseRateLimitError } from 'risex-ts';
+import { RiseApiError, RiseRateLimitError } from 'risex-ts';
 
 try {
-  await client.marketBuy(2, '20000000000000000');
+  await client.marketBuy(2, 1);
 } catch (err) {
   if (err instanceof RiseApiError) {
     console.log(err.status, err.path, err.message);
@@ -310,29 +301,30 @@ For custom integrations, the signing internals are exported:
 
 ```ts
 import {
-  createNonce,
   encodeOrder,
   encodeCancelOrder,
+  encodeCancelAll,
   encodeLeverage,
   createPermitParams,
   createRegisterSignerSignatures,
   fixSignatureV,
   REGISTER_SIGNER_TYPES,
-  VERIFY_SIGNATURE_TYPES,
+  VERIFY_WITNESS_TYPES,
 } from 'risex-ts';
 ```
 
 ## Defaults and sharp edges
 
 - **`init()` is required** — `ExchangeClient` will throw if you call authenticated methods before `init()`. It fetches the EIP-712 domain and contract addresses from the API.
-- **Sizes and prices are wad strings** — 18-decimal integer strings (e.g. `'1000000000000000000'` = 1.0). Use `parseWad('1.0')` to convert.
-- **Market orders use price `'0'`** — the matching engine ignores the price field for market orders.
-- **Signer expiry** — signers expire after 30 days by default. Call `registerSigner()` again to re-register.
+- **Sizes use `sizeSteps`** — integer steps, not decimals. Check `market.config.step_size` for the step-to-decimal conversion (e.g. `step_size: "0.001"` means 1 step = 0.001).
+- **Prices use `priceTicks`** — integer ticks. Check `market.config.step_price` for the tick-to-decimal conversion (e.g. `step_price: "0.1"` means 1 tick = $0.10).
+- **Market orders use `priceTicks: 0`** — the matching engine ignores the price field for market orders.
+- **Bitmap nonces** — the SDK fetches nonce state automatically via `GET /v1/nonce-state/{account}`. You don't need to manage nonces manually.
 - **Rate limiting is automatic** — the client will wait (not throw) when the rate limit is approached. If you exhaust the bucket entirely, `RiseRateLimitError` is thrown.
-- **Deposit amount is plain decimal** — `deposit('100')` deposits 100 USDC, not a wad value.
+- **Deposit amount is plain decimal** — `deposit('100')` deposits 100 USDC.
 - **All timestamps from the API are in nanoseconds** unless documented otherwise.
 - **WebSocket subscriptions use `market_ids`** — pass an array of market IDs (e.g. `[1, 2]`). Omit to subscribe to all markets.
-- **WebSocket URL** — defaults to `wss://ws.testnet.rise.trade/ws`. Pass `wsUrl` in options to override for mainnet or custom environments.
+- **Orderbook prices are decimal strings** — not WAD. e.g. `"68750.5"`, not `"68750500000000000000000"`.
 
 ## Compatibility
 
@@ -350,18 +342,28 @@ import {
 You called an authenticated method before `await client.init()`. Always init first:
 
 ```ts
-const client = new ExchangeClient({ accountKey, signerKey });
-await client.init(); // don't forget this
+const client = new ExchangeClient({ account, signerKey });
+await client.init();
 ```
 
-### `Could not find orders_manager in system config`
+### `accountKey is required for this operation`
 
-The API returned a system config without the expected contract addresses. This usually means the API endpoint is down or changed. Check your `baseUrl`.
+`registerSigner()` and `revokeSigner()` need the wallet's private key. Either:
+- Create your signer via the [RISEx web app](https://rise.trade) (recommended), or
+- Pass `accountKey` in the constructor options
+
+### `SignerNotAuthorized`
+
+The signer key isn't registered for this account. Create one via the RISEx web app, or call `registerSigner()` with `accountKey` provided.
+
+### `Could not find router/orders_manager in system config`
+
+The API returned a system config without the expected contract addresses. Check your `baseUrl`.
 
 ### `API /v1/orders/place → 400: ...`
 
 Common causes:
-- Signer not registered — call `await client.registerSigner()` first
+- Signer not registered for this account
 - Insufficient balance — check with `client.info.getBalance(client.account)`
 - Size below minimum — check `market.config.min_order_size`
 - Invalid market ID
@@ -372,7 +374,7 @@ The SDK handles rate limiting automatically by waiting. If you see `RiseRateLimi
 
 ### WebSocket won't connect
 
-The default WS endpoint is `wss://ws.testnet.rise.trade/ws`. Pass a custom URL if needed:
+The default WS endpoint is `wss://ws.staging.rise.trade/ws`. Pass a custom URL if needed:
 
 ```ts
 const ws = new WebSocketClient({ wsUrl: 'wss://ws.risex.trade/ws' });
@@ -389,7 +391,7 @@ npm run lint          # type-check
 npm run build         # build ESM + CJS
 ```
 
-Integration tests hit the testnet API:
+Integration tests hit the staging API:
 
 ```bash
 RUN_INTEGRATION=true npm test
