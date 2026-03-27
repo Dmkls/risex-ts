@@ -39,7 +39,7 @@ export { formatWad, parseWad, parseWadString } from './utils/format.js';
 export { RiseApiError, RiseSigningError, RiseRateLimitError } from './utils/errors.js';
 
 // Signing (advanced use)
-export { encodeOrder, encodeCancelOrder, encodeCancelAll, encodeLeverage, encodeMarginMode, encodeIsolatedMargin } from './signing/encoder.js';
+export { encodeOrder, encodeCancelOrder, encodeCancelAll, encodeLeverage, encodeMarginMode, encodeIsolatedMargin, V3_FLAG_PERMIT, V3_FLAG_PERMIT_ERC1271 } from './signing/encoder.js';
 export { createPermitParams } from './signing/permit.js';
 export { createRegisterSignerSignatures, fixSignatureV } from './signing/signer.js';
 export { REGISTER_SIGNER_TYPES, VERIFY_SIGNER_TYPES, REVOKE_SIGNER_TYPES, VERIFY_WITNESS_TYPES } from './signing/domain.js';

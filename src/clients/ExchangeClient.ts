@@ -13,6 +13,7 @@ export class ExchangeClient {
 
   private readonly accountWallet: ethers.Wallet | null;
   private readonly signerWallet: ethers.Wallet;
+  private readonly isErc1271: boolean;
   private domain!: Eip712Domain;
   private target!: string;
   private initialized = false;
@@ -28,6 +29,7 @@ export class ExchangeClient {
     this.info = new InfoClient(opts);
     this.signerWallet = new ethers.Wallet(opts.signerKey);
     this.signer = this.signerWallet.address;
+    this.isErc1271 = opts.erc1271 ?? false;
 
     if (opts.accountKey) {
       this.accountWallet = new ethers.Wallet(opts.accountKey);
@@ -148,11 +150,13 @@ export class ExchangeClient {
       this.target,
       this.domain,
       nonceState,
+      undefined,
+      this.isErc1271,
     );
   }
 
   async placeOrder(orderParams: OrderParams): Promise<OrderResponse> {
-    const hash = encodeOrder(orderParams);
+    const hash = encodeOrder(orderParams, this.isErc1271);
     const permit = await this.createPermit(hash);
 
     return this.info['http'].post<OrderResponse>('/v1/orders/place', {

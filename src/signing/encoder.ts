@@ -10,6 +10,7 @@ const ACTION_CANCEL_ALL_ORDERS_HASH = ethers.keccak256(ethers.toUtf8Bytes(ACTION
 const V3_FLAG_PERMIT = 0x01;
 const V3_FLAG_BUILDER = 0x02;
 const V3_FLAG_CLIENT_ID = 0x04;
+const V3_FLAG_PERMIT_ERC1271 = 0x09;
 const V3_FLAG_TTL = 0x10;
 
 /**
@@ -48,8 +49,8 @@ function encodeOrderData(p: OrderParams): bigint {
 /**
  * Compute protocol header flags based on which optional fields are present.
  */
-function computeHeaderFlags(builderId: number, clientOrderId: bigint, ttlUnits: number): number {
-  let flags = V3_FLAG_PERMIT; // always set for ECDSA permits
+function computeHeaderFlags(builderId: number, clientOrderId: bigint, ttlUnits: number, isErc1271 = false): number {
+  let flags = isErc1271 ? V3_FLAG_PERMIT_ERC1271 : V3_FLAG_PERMIT;
   if (builderId !== 0) flags |= V3_FLAG_BUILDER;
   if (clientOrderId !== 0n) flags |= V3_FLAG_CLIENT_ID;
   if (ttlUnits !== 0) flags |= V3_FLAG_TTL;
@@ -60,10 +61,10 @@ function computeHeaderFlags(builderId: number, clientOrderId: bigint, ttlUnits: 
  * Compute the hash for a place order action.
  * hash = keccak256(abi.encode(actionTypeHash, headerFlags, orderData, builderID, clientOrderID, ttlUnits))
  */
-export function encodeOrder(p: OrderParams): string {
+export function encodeOrder(p: OrderParams, isErc1271 = false): string {
   const orderData = encodeOrderData(p);
   const clientOrderId = BigInt(p.client_order_id ?? '0');
-  const headerFlags = computeHeaderFlags(p.builder_id ?? 0, clientOrderId, p.ttl_units);
+  const headerFlags = computeHeaderFlags(p.builder_id ?? 0, clientOrderId, p.ttl_units, isErc1271);
 
   const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
     ['bytes32', 'uint8', 'uint256', 'uint16', 'uint64', 'uint16'],
@@ -103,6 +104,9 @@ export function encodeCancelAll(marketId: number): string {
   );
   return ethers.keccak256(encoded);
 }
+
+// Re-export for advanced use
+export { V3_FLAG_PERMIT, V3_FLAG_PERMIT_ERC1271, V3_FLAG_BUILDER, V3_FLAG_CLIENT_ID, V3_FLAG_TTL };
 
 /**
  * Encode leverage update parameters.

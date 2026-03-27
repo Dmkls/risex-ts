@@ -50,4 +50,6 @@ export interface ExchangeClientOptions extends ClientOptions {
   accountKey?: string;
   /** Signer/session key private key (hex, with or without 0x prefix) */
   signerKey: string;
+  /** Set to true if the account is an ERC-1271 smart contract wallet. */
+  erc1271?: boolean;
 }
