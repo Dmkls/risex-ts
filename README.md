@@ -125,11 +125,11 @@ const info = new InfoClient(options?)
 
 | Option | Type | Default |
 |--------|------|---------|
-| `baseUrl` | `string` | `https://api.staging.rise.trade` |
+| `baseUrl` | `string` | `https://api.testnet.rise.trade` |
 | `timeout` | `number` | `30000` |
 | `logLevel` | `'debug' \| 'info' \| 'warn' \| 'error' \| 'none'` | `'warn'` |
 
-These options are shared by `ExchangeClient` and `WebSocketClient`. The `WebSocketClient` also accepts `wsUrl` (default: `wss://ws.staging.rise.trade/ws`).
+These options are shared by `ExchangeClient` and `WebSocketClient`. The `WebSocketClient` also accepts `wsUrl` (default: `wss://ws.testnet.rise.trade/ws`).
 
 #### Markets
 
@@ -374,7 +374,7 @@ The SDK handles rate limiting automatically by waiting. If you see `RiseRateLimi
 
 ### WebSocket won't connect
 
-The default WS endpoint is `wss://ws.staging.rise.trade/ws`. Pass a custom URL if needed:
+The default WS endpoint is `wss://ws.testnet.rise.trade/ws`. Pass a custom URL if needed:
 
 ```ts
 const ws = new WebSocketClient({ wsUrl: 'wss://ws.risex.trade/ws' });
@@ -391,7 +391,7 @@ npm run lint          # type-check
 npm run build         # build ESM + CJS
 ```
 
-Integration tests hit the staging API:
+Integration tests hit the testnet API:
 
 ```bash
 RUN_INTEGRATION=true npm test

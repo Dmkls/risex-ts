@@ -4,3 +4,5 @@ dist/
 *.tsbuildinfo
 coverage/
 .DS_Store
+signing-guide.md
+signing-gide-2.md

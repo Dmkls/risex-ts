@@ -38,7 +38,7 @@ npm run build           # dual ESM/CJS build (tsup)
 
 ## API base
 
-- Staging: `https://api.staging.rise.trade`
+- Testnet: `https://api.testnet.rise.trade`
 - System config: `GET /v1/system/config` (has contract addresses)
 - EIP-712 domain: `GET /v1/auth/eip712-domain`
 - Nonce state: `GET /v1/nonce-state/{account}`

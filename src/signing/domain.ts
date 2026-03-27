@@ -39,4 +39,4 @@ export const VERIFY_WITNESS_TYPES: Record<string, ethers.TypedDataField[]> = {
   ],
 };
 
-export const REGISTER_SIGNER_MESSAGE = 'RISEx Signer Registration';
+export const REGISTER_SIGNER_MESSAGE = 'Registering signer for RISEx';

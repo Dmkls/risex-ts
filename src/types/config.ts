@@ -33,9 +33,9 @@ export interface SystemConfig {
 }
 
 export interface ClientOptions {
-  /** API base URL (default: staging) */
+  /** API base URL (default: testnet) */
   baseUrl?: string;
-  /** WebSocket URL (default: staging) */
+  /** WebSocket URL (default: testnet) */
   wsUrl?: string;
   /** Request timeout in ms (default: 30000) */
   timeout?: number;

@@ -14,15 +14,6 @@ export function fixSignatureV(sig: string): string {
   return ethers.hexlify(bytes);
 }
 
-/**
- * Convert a hex signature string to base64.
- */
-function hexToBase64(hex: string): string {
-  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const bytes = Buffer.from(clean, 'hex');
-  return bytes.toString('base64');
-}
-
 export interface RegisterSignerSignatures {
   accountSignature: string;
   signerSignature: string;
@@ -52,30 +43,34 @@ export async function createRegisterSignerSignatures(
     verifyingContract: domain.verifyingContract,
   };
 
+  // Auth operations use anchor+1 with bitmap=0 to guarantee a fresh nonce space
+  const authNonceAnchor = Number(nonceState.nonce_anchor) + 1;
+  const authNonceBitmap = 0;
+
   const accountSignature = fixSignatureV(
     await accountWallet.signTypedData(ethDomain, REGISTER_SIGNER_TYPES, {
       account: accountWallet.address,
       signer: signerWallet.address,
       message,
       expiration,
-      nonceAnchor: nonceState.nonce_anchor,
-      nonceBitmap: nonceState.current_bitmap_index,
+      nonceAnchor: authNonceAnchor,
+      nonceBitmap: authNonceBitmap,
     }),
   );
 
   const signerSignature = fixSignatureV(
     await signerWallet.signTypedData(ethDomain, VERIFY_SIGNER_TYPES, {
       account: accountWallet.address,
-      nonceAnchor: nonceState.nonce_anchor,
-      nonceBitmap: nonceState.current_bitmap_index,
+      nonceAnchor: authNonceAnchor,
+      nonceBitmap: authNonceBitmap,
     }),
   );
 
   return {
-    accountSignature: hexToBase64(accountSignature),
-    signerSignature: hexToBase64(signerSignature),
-    nonceAnchor: Number(nonceState.nonce_anchor),
-    nonceBitmapIndex: nonceState.current_bitmap_index,
+    accountSignature,
+    signerSignature,
+    nonceAnchor: Number(nonceState.nonce_anchor) + 1,
+    nonceBitmapIndex: 0,
     expiration,
     message,
   };

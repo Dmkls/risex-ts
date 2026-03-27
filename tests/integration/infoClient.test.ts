@@ -59,7 +59,7 @@ describe.skipIf(!RUN)('InfoClient integration', () => {
       const balance = await client.getBalance(account);
       expect(balance).toBeDefined();
     } catch (err: any) {
-      // Account may not exist on staging — 500 with "execution reverted" is expected
+      // Account may not exist — 500 with "execution reverted" is expected
       expect(err.status).toBe(500);
     }
   });
