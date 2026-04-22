@@ -5,6 +5,7 @@ export interface PermitParams {
   nonce_bitmap_index: number;
   deadline: number;
   signature: string;
+  is_erc1271?: boolean;
 }
 
 export interface NonceState {

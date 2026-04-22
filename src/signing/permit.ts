@@ -24,6 +24,7 @@ export async function createPermitParams(
   domain: Eip712Domain,
   nonceState: NonceState,
   deadlineSeconds?: number,
+  isErc1271 = false,
 ): Promise<PermitParams> {
   const deadline = Math.floor(Date.now() / 1000) + (deadlineSeconds ?? 300);
   const nonceAnchor = Number(nonceState.nonce_anchor);
@@ -54,5 +55,6 @@ export async function createPermitParams(
     nonce_bitmap_index: nonceBitmapIndex,
     deadline,
     signature: hexToBase64(rawSig),
+    ...(isErc1271 ? { is_erc1271: true } : {}),
   };
 }
