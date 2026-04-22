@@ -1,6 +1,6 @@
 {
   "name": "risex-client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TypeScript SDK for the RISEx perpetuals DEX on RISE Chain",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.mjs",

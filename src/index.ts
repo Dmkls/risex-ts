@@ -26,6 +26,7 @@ export type {
   WsChannel,
   WsSubscription,
   WsMessage,
+  WsAuthParams,
   WsOrderbookUpdate,
   WsTradeUpdate,
   WsOrderUpdate,

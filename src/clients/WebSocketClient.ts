@@ -11,7 +11,7 @@ import {
   WS_RATE_WINDOW_MS,
 } from '../utils/constants.js';
 import type { ClientOptions } from '../types/config.js';
-import type { WsSubscription, WsMessage, WsEventHandler } from '../types/websocket.js';
+import type { WsSubscription, WsMessage, WsAuthParams, WsEventHandler } from '../types/websocket.js';
 
 // Inline CRC32 for orderbook checksum validation
 const CRC32_TABLE = new Uint32Array(256);
@@ -150,6 +150,23 @@ export class WebSocketClient extends EventEmitter {
   offChannel(channel: string, handler: WsEventHandler): void {
     this.handlers.get(channel)?.delete(handler);
   }
+
+  /** Send an auth message for private channel access (orders, positions, fills). */
+  authenticate(params: WsAuthParams): void {
+    this.send(JSON.stringify({ method: 'auth', params }));
+  }
+
+  /** The EIP-712 types used for WebSocket auth signing. */
+  static readonly AUTH_TYPES = {
+    Register: [
+      { name: 'signer', type: 'address' },
+      { name: 'message', type: 'string' },
+      { name: 'nonce', type: 'uint64' },
+    ],
+  };
+
+  /** The fixed message string signed for WebSocket auth. */
+  static readonly AUTH_MESSAGE = 'sign in with RISEx';
 
   get isConnected(): boolean {
     return this.connected;
