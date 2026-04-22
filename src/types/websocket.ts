@@ -3,6 +3,8 @@ export type WsChannel =
   | 'trades'
   | 'orders'
   | 'positions'
+  | 'fills'
+  | 'account'
   | 'oracle'
   | 'ticker';
 
@@ -64,6 +66,15 @@ export interface WsFillUpdate {
   fee?: string;
   timestamp: string;
   [key: string]: unknown;
+}
+
+export interface WsAuthParams {
+  account: string;
+  signer: string;
+  message: string;
+  nonce: number;
+  expiration: number;
+  signature: string;
 }
 
 export type WsEventHandler = (message: WsMessage) => void;

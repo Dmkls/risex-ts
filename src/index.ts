@@ -13,19 +13,20 @@ export type { ClientOptions, ExchangeClientOptions, Eip712Domain, SystemConfig }
 export type { Market, MarketConfig, Orderbook, OrderbookLevel, Trade, Candle, FundingRate } from './types/market.js';
 
 // Types - Account
-export type { Balance, Equity, Position, FundingPayment, Transfer, RealizedPnl } from './types/account.js';
+export type { Balance, Position, FundingPayment, Transfer, RealizedPnl } from './types/account.js';
 
 // Types - Order
-export type { OrderParams, CancelParams, TpSlParams, OrderResponse, OpenOrder, OrderHistoryEntry, Fill } from './types/order.js';
+export type { OrderParams, CancelParams, TpSlParams, OrderResponse, CancelResponse, CancelAllResponse, OpenOrder, OrderHistoryEntry, Fill } from './types/order.js';
 
 // Types - Auth
-export type { PermitParams, SignerInfo, SessionKeyStatus, RegisterSignerResult } from './types/auth.js';
+export type { PermitParams, NonceState, SignerInfo, SessionKeyStatus, RegisterSignerResult } from './types/auth.js';
 
 // Types - WebSocket
 export type {
   WsChannel,
   WsSubscription,
   WsMessage,
+  WsAuthParams,
   WsOrderbookUpdate,
   WsTradeUpdate,
   WsOrderUpdate,
@@ -39,8 +40,7 @@ export { formatWad, parseWad, parseWadString } from './utils/format.js';
 export { RiseApiError, RiseSigningError, RiseRateLimitError } from './utils/errors.js';
 
 // Signing (advanced use)
-export { createNonce } from './signing/nonce.js';
-export { encodeOrder, encodeCancelOrder, encodeLeverage, encodeMarginMode, encodeIsolatedMargin } from './signing/encoder.js';
+export { encodeOrder, encodeCancelOrder, encodeCancelAll, encodeLeverage, encodeMarginMode, encodeIsolatedMargin } from './signing/encoder.js';
 export { createPermitParams } from './signing/permit.js';
 export { createRegisterSignerSignatures, fixSignatureV } from './signing/signer.js';
-export { REGISTER_SIGNER_TYPES, VERIFY_SIGNER_TYPES, VERIFY_SIGNATURE_TYPES } from './signing/domain.js';
+export { REGISTER_SIGNER_TYPES, VERIFY_SIGNER_TYPES, REVOKE_SIGNER_TYPES, VERIFY_WITNESS_TYPES } from './signing/domain.js';

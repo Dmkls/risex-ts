@@ -1,9 +1,10 @@
 import 'dotenv/config';
-import { ExchangeClient, formatWad } from '../src/index.js';
+import { ExchangeClient } from '../src/index.js';
 
 async function main() {
+  // Create API Key via the web app
   const client = new ExchangeClient({
-    accountKey: process.env.ACCOUNT_PRIVATE_KEY!,
+    account: process.env.ACCOUNT_ADDRESS!,
     signerKey: process.env.SIGNER_PRIVATE_KEY!,
     baseUrl: process.env.API_URL,
   });
@@ -14,9 +15,8 @@ async function main() {
   // Initialize (fetches EIP-712 domain + contract addresses)
   await client.init();
 
-  // Register signer (idempotent)
-  await client.registerSigner();
-  console.log('Signer registered');
+  // Signer should already be registered
+  console.log('Signer active:', await client.isSignerRegistered());
 
   // Fetch markets
   const markets = await client.info.getMarkets();
@@ -25,34 +25,34 @@ async function main() {
   if (!market) throw new Error('No visible market');
 
   const marketId = Number(market.market_id);
-  const minSize = BigInt(market.config.min_order_size);
-  console.log(`\nUsing ${market.display_name} (id=${marketId}), min size=${formatWad(minSize.toString())}`);
-
-  // Check balance
-  console.log(`Balance: ${formatWad(await client.info.getBalance(client.account))} USDC`);
+  const stepSize = parseFloat(market.config.step_size);
+  const minSize = parseFloat(market.config.min_order_size);
+  const minSteps = Math.max(1, Math.ceil(minSize / stepSize));
+  console.log(`\nUsing ${market.display_name} (id=${marketId}), min size=${minSize}, step=${stepSize}, min steps=${minSteps}`);
 
   // Place market buy
   console.log('\n--- Market Buy ---');
-  const buyResult = await client.marketBuy(marketId, minSize);
-  console.log('Order:', buyResult.order_id, 'tx:', buyResult.transaction_hash);
+  const buyResult = await client.marketBuy(marketId, minSteps);
+  console.log('Order:', buyResult.order_id, 'tx:', buyResult.tx_hash);
 
   await new Promise((r) => setTimeout(r, 3000));
 
   // Check position
   const pos = await client.info.getPosition(marketId, client.account);
-  console.log('Position:', pos?.size !== '0' ? `${formatWad(pos!.size)} ${pos!.side === 0 ? 'Long' : 'Short'}` : 'none');
+  console.log('Position:', pos && pos.size !== '0' ? `${pos.size} ${pos.side === 0 ? 'Long' : 'Short'}` : 'none');
 
   // Close position
   console.log('\n--- Closing Position ---');
   const closeResult = await client.closePosition(marketId);
   if (closeResult) {
-    console.log('Order:', closeResult.order_id, 'tx:', closeResult.transaction_hash);
+    console.log('Order:', closeResult.order_id, 'tx:', closeResult.tx_hash);
   } else {
     console.log('No position to close');
   }
 
   await new Promise((r) => setTimeout(r, 3000));
-  console.log('Final balance:', formatWad(await client.info.getBalance(client.account)), 'USDC');
+  const finalPos = await client.info.getPosition(marketId, client.account);
+  console.log('Final position:', finalPos && finalPos.size !== '0' ? finalPos.size : 'closed');
 }
 
 main().catch(console.error);

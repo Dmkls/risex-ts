@@ -2,16 +2,16 @@ import { ethers } from 'ethers';
 import { InfoClient } from './InfoClient.js';
 import { createPermitParams } from '../signing/permit.js';
 import { createRegisterSignerSignatures } from '../signing/signer.js';
-import { encodeOrder, encodeCancelOrder, encodeLeverage, encodeMarginMode, encodeIsolatedMargin } from '../signing/encoder.js';
+import { encodeOrder, encodeCancelOrder, encodeCancelAll, encodeLeverage, encodeMarginMode, encodeIsolatedMargin } from '../signing/encoder.js';
 import { Side, OrderType, TimeInForce, StpMode, MarginMode } from '../types/common.js';
 import type { ExchangeClientOptions, Eip712Domain } from '../types/config.js';
-import type { OrderParams, CancelParams, OrderResponse } from '../types/order.js';
-import type { PermitParams, RegisterSignerResult } from '../types/auth.js';
+import type { OrderParams, CancelParams, OrderResponse, CancelResponse, CancelAllResponse } from '../types/order.js';
+import type { PermitParams, NonceState, RegisterSignerResult } from '../types/auth.js';
 
 export class ExchangeClient {
   public readonly info: InfoClient;
 
-  private readonly accountWallet: ethers.Wallet;
+  private readonly accountWallet: ethers.Wallet | null;
   private readonly signerWallet: ethers.Wallet;
   private domain!: Eip712Domain;
   private target!: string;
@@ -21,11 +21,21 @@ export class ExchangeClient {
   public readonly signer: string;
 
   constructor(opts: ExchangeClientOptions) {
+    if (!opts.account && !opts.accountKey) {
+      throw new Error('Either account (address) or accountKey (private key) must be provided.');
+    }
+
     this.info = new InfoClient(opts);
-    this.accountWallet = new ethers.Wallet(opts.accountKey);
     this.signerWallet = new ethers.Wallet(opts.signerKey);
-    this.account = this.accountWallet.address;
     this.signer = this.signerWallet.address;
+
+    if (opts.accountKey) {
+      this.accountWallet = new ethers.Wallet(opts.accountKey);
+      this.account = this.accountWallet.address;
+    } else {
+      this.accountWallet = null;
+      this.account = opts.account!;
+    }
   }
 
   /**
@@ -37,9 +47,10 @@ export class ExchangeClient {
 
     const config = await this.info.getSystemConfig();
     this.target =
+      config.addresses?.router as string ??
       config.addresses?.perp_v2?.orders_manager as string ??
       config.contract_addresses?.perps_manager as string;
-    if (!this.target) throw new Error('Could not find orders_manager in system config');
+    if (!this.target) throw new Error('Could not find router/orders_manager in system config');
 
     this.initialized = true;
     return this;
@@ -49,6 +60,20 @@ export class ExchangeClient {
     if (!this.initialized) throw new Error('ExchangeClient not initialized. Call init() first.');
   }
 
+  private assertAccountKey(): void {
+    if (!this.accountWallet) {
+      throw new Error(
+        'accountKey is required for this operation. ' +
+        'Provide accountKey in ExchangeClientOptions, or register your signer via the RISEx web app.',
+      );
+    }
+  }
+
+  /** Fetch current nonce state for this account. */
+  async getNonceState(): Promise<NonceState> {
+    return this.info.getNonceState(this.account);
+  }
+
   // ── Auth ────────────────────────────────────────────────
 
   async isSignerRegistered(): Promise<boolean> {
@@ -56,40 +81,56 @@ export class ExchangeClient {
     return res.status === 1;
   }
 
+  /**
+   * Register the signer key on-chain.
+   * Requires accountKey — if your signer was created via the RISEx web app, this is not needed.
+   */
   async registerSigner(label = 'risex-ts'): Promise<RegisterSignerResult> {
     this.assertInit();
+    this.assertAccountKey();
     if (await this.isSignerRegistered()) return { alreadyActive: true };
 
+    const nonceState = await this.getNonceState();
+
     const sigs = await createRegisterSignerSignatures(
-      this.accountWallet,
+      this.accountWallet!,
       this.signerWallet,
       this.domain,
+      nonceState,
     );
 
     return this.info['http'].post<RegisterSignerResult>('/v1/auth/register-signer', {
       account: this.account,
       signer: this.signer,
       message: sigs.message,
-      nonce: sigs.nonce,
-      expiration: sigs.expiration,
+      nonce_anchor: String(sigs.nonceAnchor),
+      nonce_bitmap_index: sigs.nonceBitmapIndex,
+      expiration: String(sigs.expiration),
       account_signature: sigs.accountSignature,
       signer_signature: sigs.signerSignature,
       label,
     });
   }
 
+  /**
+   * Revoke a signer key on-chain.
+   * Requires accountKey.
+   */
   async revokeSigner(signerAddress?: string): Promise<unknown> {
     this.assertInit();
-    const target = signerAddress ?? this.signer;
+    this.assertAccountKey();
+    const nonceState = await this.getNonceState();
     const sigs = await createRegisterSignerSignatures(
-      this.accountWallet,
+      this.accountWallet!,
       this.signerWallet,
       this.domain,
+      nonceState,
     );
     return this.info['http'].post('/v1/auth/revoke-signer', {
       account: this.account,
-      signer: target,
-      nonce: sigs.nonce,
+      signer: signerAddress ?? this.signer,
+      nonce_anchor: String(sigs.nonceAnchor),
+      nonce_bitmap_index: sigs.nonceBitmapIndex,
       account_signature: sigs.accountSignature,
       signer_signature: sigs.signerSignature,
     });
@@ -97,117 +138,130 @@ export class ExchangeClient {
 
   // ── Orders ──────────────────────────────────────────────
 
-  private async createPermit(encodedData: Uint8Array): Promise<PermitParams> {
+  private async createPermit(hash: string): Promise<PermitParams> {
     this.assertInit();
+    const nonceState = await this.getNonceState();
     return createPermitParams(
-      encodedData,
+      hash,
       this.signerWallet,
       this.account,
       this.target,
       this.domain,
+      nonceState,
     );
   }
 
   async placeOrder(orderParams: OrderParams): Promise<OrderResponse> {
-    const encoded = encodeOrder(orderParams);
-    const permit = await this.createPermit(encoded);
+    const hash = encodeOrder(orderParams);
+    const permit = await this.createPermit(hash);
 
     return this.info['http'].post<OrderResponse>('/v1/orders/place', {
-      order_params: orderParams,
-      permit_params: permit,
+      market_id: orderParams.market_id,
+      side: orderParams.side,
+      order_type: orderParams.order_type,
+      price_ticks: orderParams.price_ticks,
+      size_steps: orderParams.size_steps,
+      time_in_force: orderParams.time_in_force,
+      post_only: orderParams.post_only,
+      reduce_only: orderParams.reduce_only,
+      stp_mode: orderParams.stp_mode,
+      ttl_units: orderParams.ttl_units,
+      client_order_id: orderParams.client_order_id ?? '0',
+      builder_id: orderParams.builder_id ?? 0,
+      permit,
     });
   }
 
-  async cancelOrder(params: CancelParams): Promise<unknown> {
-    const encoded = encodeCancelOrder(params);
-    const permit = await this.createPermit(encoded);
+  async cancelOrder(params: CancelParams): Promise<CancelResponse> {
+    const hash = encodeCancelOrder(params);
+    const permit = await this.createPermit(hash);
 
-    return this.info['http'].post('/v1/orders/cancel', {
+    return this.info['http'].post<CancelResponse>('/v1/orders/cancel', {
       market_id: params.market_id,
       order_id: params.order_id,
-      permit_params: permit,
+      permit,
     });
   }
 
-  async cancelAllOrders(marketId?: number): Promise<unknown> {
-    const orders = await this.info.getOpenOrders(this.account, marketId);
-    const results = await Promise.all(
-      orders.map((o) =>
-        this.cancelOrder({ market_id: o.market_id, order_id: o.order_id }),
-      ),
-    );
-    return results;
+  async cancelAllOrders(marketId = 0): Promise<CancelAllResponse> {
+    const hash = encodeCancelAll(marketId);
+    const permit = await this.createPermit(hash);
+
+    return this.info['http'].post<CancelAllResponse>('/v1/orders/cancel-all', {
+      market_id: marketId,
+      permit,
+    });
   }
 
   // ── Convenience order methods ───────────────────────────
 
-  async marketBuy(marketId: number, size: bigint | string): Promise<OrderResponse> {
+  async marketBuy(marketId: number, sizeSteps: number): Promise<OrderResponse> {
     return this.placeOrder({
-      market_id: String(marketId),
-      size: String(size),
-      price: '0',
+      market_id: marketId,
+      size_steps: sizeSteps,
+      price_ticks: 0,
       side: Side.Long,
       order_type: OrderType.Market,
-      tif: TimeInForce.ImmediateOrCancel,
+      time_in_force: TimeInForce.ImmediateOrCancel,
       post_only: false,
       reduce_only: false,
       stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
+      ttl_units: 0,
     });
   }
 
-  async marketSell(marketId: number, size: bigint | string, reduceOnly = false): Promise<OrderResponse> {
+  async marketSell(marketId: number, sizeSteps: number, reduceOnly = false): Promise<OrderResponse> {
     return this.placeOrder({
-      market_id: String(marketId),
-      size: String(size),
-      price: '0',
+      market_id: marketId,
+      size_steps: sizeSteps,
+      price_ticks: 0,
       side: Side.Short,
       order_type: OrderType.Market,
-      tif: TimeInForce.ImmediateOrCancel,
+      time_in_force: TimeInForce.ImmediateOrCancel,
       post_only: false,
       reduce_only: reduceOnly,
       stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
+      ttl_units: 0,
     });
   }
 
   async limitBuy(
     marketId: number,
-    size: bigint | string,
-    price: bigint | string,
+    sizeSteps: number,
+    priceTicks: number,
     postOnly = false,
   ): Promise<OrderResponse> {
     return this.placeOrder({
-      market_id: String(marketId),
-      size: String(size),
-      price: String(price),
+      market_id: marketId,
+      size_steps: sizeSteps,
+      price_ticks: priceTicks,
       side: Side.Long,
       order_type: OrderType.Limit,
-      tif: TimeInForce.GoodTillCancelled,
+      time_in_force: TimeInForce.GoodTillCancelled,
       post_only: postOnly,
       reduce_only: false,
       stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
+      ttl_units: 0,
     });
   }
 
   async limitSell(
     marketId: number,
-    size: bigint | string,
-    price: bigint | string,
+    sizeSteps: number,
+    priceTicks: number,
     postOnly = false,
   ): Promise<OrderResponse> {
     return this.placeOrder({
-      market_id: String(marketId),
-      size: String(size),
-      price: String(price),
+      market_id: marketId,
+      size_steps: sizeSteps,
+      price_ticks: priceTicks,
       side: Side.Short,
       order_type: OrderType.Limit,
-      tif: TimeInForce.GoodTillCancelled,
+      time_in_force: TimeInForce.GoodTillCancelled,
       post_only: postOnly,
       reduce_only: false,
       stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
+      ttl_units: 0,
     });
   }
 
@@ -215,11 +269,16 @@ export class ExchangeClient {
     const pos = await this.info.getPosition(marketId, this.account);
     if (!pos || pos.size === '0') return null;
 
-    const size = (() => { const s = BigInt(pos.size); return s < 0n ? -s : s; })();
+    const absSize = parseFloat(pos.size) < 0 ? -parseFloat(pos.size) : parseFloat(pos.size);
+    const markets = await this.info.getMarkets();
+    const market = markets.find((m) => String(m.market_id) === String(marketId));
+    const stepSize = market ? parseFloat(market.config.step_size) : 0.000001;
+    const sizeSteps = Math.round(absSize / stepSize);
+
     const isLong = pos.side === 0;
     return isLong
-      ? this.marketSell(marketId, size, true)
-      : this.marketBuy(marketId, size);
+      ? this.marketSell(marketId, sizeSteps, true)
+      : this.marketBuy(marketId, sizeSteps);
   }
 
   // ── Account management ─────────────────────────────────
@@ -232,80 +291,35 @@ export class ExchangeClient {
   }
 
   async updateLeverage(marketId: number, leverage: bigint): Promise<unknown> {
-    const encoded = encodeLeverage(String(marketId), leverage);
-    const permit = await this.createPermit(encoded);
+    const hash = encodeLeverage(marketId, leverage);
+    const permit = await this.createPermit(hash);
 
     return this.info['http'].post('/v1/account/leverage', {
-      market_id: String(marketId),
+      market_id: marketId,
       leverage: String(leverage),
-      permit_params: permit,
+      permit,
     });
   }
 
   async updateMarginMode(marketId: number, mode: MarginMode): Promise<unknown> {
-    const encoded = encodeMarginMode(String(marketId), mode);
-    const permit = await this.createPermit(encoded);
+    const hash = encodeMarginMode(marketId, mode);
+    const permit = await this.createPermit(hash);
 
     return this.info['http'].post('/v1/account/margin-mode', {
-      market_id: String(marketId),
+      market_id: marketId,
       margin_mode: mode,
-      permit_params: permit,
+      permit,
     });
   }
 
   async updateIsolatedMargin(marketId: number, amount: bigint): Promise<unknown> {
-    const encoded = encodeIsolatedMargin(String(marketId), amount);
-    const permit = await this.createPermit(encoded);
+    const hash = encodeIsolatedMargin(marketId, amount);
+    const permit = await this.createPermit(hash);
 
-    return this.info['http'].post('/v1/account/update-isolated-margin', {
-      market_id: String(marketId),
+    return this.info['http'].post('/v1/account/isolated-margin', {
+      market_id: marketId,
       amount: String(amount),
-      permit_params: permit,
-    });
-  }
-
-  // ── TP/SL ───────────────────────────────────────────────
-
-  async placeTpSlOrder(params: {
-    market_id: string;
-    take_profit_price?: string;
-    stop_loss_price?: string;
-    [key: string]: unknown;
-  }): Promise<unknown> {
-    // TP/SL orders use ABI encoding of relevant params
-    const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-    const encoded = ethers.getBytes(
-      abiCoder.encode(
-        ['uint256', 'uint256', 'uint256'],
-        [
-          BigInt(params.market_id),
-          params.take_profit_price ? BigInt(params.take_profit_price) : 0n,
-          params.stop_loss_price ? BigInt(params.stop_loss_price) : 0n,
-        ],
-      ),
-    );
-    const permit = await this.createPermit(encoded);
-
-    return this.info['http'].post('/v1/orders/tp-sl/place', {
-      ...params,
-      permit_params: permit,
-    });
-  }
-
-  async cancelTpSlOrder(params: {
-    market_id: string;
-    order_id: string;
-    [key: string]: unknown;
-  }): Promise<unknown> {
-    const encoded = encodeCancelOrder({
-      market_id: params.market_id,
-      order_id: params.order_id,
-    });
-    const permit = await this.createPermit(encoded);
-
-    return this.info['http'].post('/v1/orders/tp-sl/cancel', {
-      ...params,
-      permit_params: permit,
+      permit,
     });
   }
 }

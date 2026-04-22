@@ -1,186 +1,126 @@
 import { describe, it, expect } from 'vitest';
-import { encodeOrder, encodeCancelOrder } from '../../src/signing/encoder.js';
+import { encodeOrder, encodeCancelOrder, encodeCancelAll } from '../../src/signing/encoder.js';
 import { Side, OrderType, TimeInForce, StpMode } from '../../src/types/common.js';
-import { ethers } from 'ethers';
 
 describe('encodeOrder', () => {
-  it('should produce 47 bytes', () => {
-    const buf = encodeOrder({
-      market_id: '1',
-      size: '1000000000000000000',
-      price: '2000000000000000000000',
+  it('should return a bytes32 hash string', () => {
+    const hash = encodeOrder({
+      market_id: 1,
+      size_steps: 100,
+      price_ticks: 500000,
       side: Side.Long,
       order_type: OrderType.Limit,
-      tif: TimeInForce.GoodTillCancelled,
+      time_in_force: TimeInForce.GoodTillCancelled,
       post_only: false,
       reduce_only: false,
       stp_mode: StpMode.None,
-      expiry: 0,
+      ttl_units: 0,
     });
-    expect(buf.length).toBe(47);
+    expect(hash).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
-  it('should encode marketId in first 8 bytes', () => {
-    const buf = encodeOrder({
-      market_id: '1',
-      size: '0',
-      price: '0',
-      side: Side.Long,
+  it('should produce different hashes for different sides', () => {
+    const base = {
+      market_id: 1,
+      size_steps: 100,
+      price_ticks: 500000,
       order_type: OrderType.Market,
-      tif: TimeInForce.ImmediateOrCancel,
+      time_in_force: TimeInForce.ImmediateOrCancel,
       post_only: false,
       reduce_only: false,
       stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
-    });
-    const view = new DataView(buf.buffer);
-    expect(view.getBigUint64(0)).toBe(1n);
+      ttl_units: 0,
+    };
+
+    const longHash = encodeOrder({ ...base, side: Side.Long });
+    const shortHash = encodeOrder({ ...base, side: Side.Short });
+    expect(longHash).not.toBe(shortHash);
   });
 
-  it('should encode side in flags byte', () => {
-    const longBuf = encodeOrder({
-      market_id: '0',
-      size: '0',
-      price: '0',
-      side: Side.Long,
-      order_type: OrderType.Market,
-      tif: TimeInForce.ImmediateOrCancel,
-      post_only: false,
-      reduce_only: false,
-      stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
-    });
-    expect(longBuf[40] & 1).toBe(0);
-
-    const shortBuf = encodeOrder({
-      market_id: '0',
-      size: '0',
-      price: '0',
-      side: Side.Short,
-      order_type: OrderType.Market,
-      tif: TimeInForce.ImmediateOrCancel,
-      post_only: false,
-      reduce_only: false,
-      stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
-    });
-    expect(shortBuf[40] & 1).toBe(1);
-  });
-
-  it('should encode postOnly and reduceOnly flags', () => {
-    const buf = encodeOrder({
-      market_id: '0',
-      size: '0',
-      price: '0',
+  it('should produce different hashes for different markets', () => {
+    const base = {
+      size_steps: 100,
+      price_ticks: 500000,
       side: Side.Long,
       order_type: OrderType.Limit,
-      tif: TimeInForce.GoodTillCancelled,
-      post_only: true,
-      reduce_only: true,
-      stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
-    });
-    expect(buf[40] & 0x02).toBe(2); // postOnly
-    expect(buf[40] & 0x04).toBe(4); // reduceOnly
-  });
-
-  it('should encode stpMode in bits 3-4', () => {
-    const buf = encodeOrder({
-      market_id: '0',
-      size: '0',
-      price: '0',
-      side: Side.Long,
-      order_type: OrderType.Market,
-      tif: TimeInForce.ImmediateOrCancel,
+      time_in_force: TimeInForce.GoodTillCancelled,
       post_only: false,
       reduce_only: false,
-      stp_mode: StpMode.None, // value = 3
-      expiry: 0,
-    });
-    expect((buf[40] >> 3) & 3).toBe(3);
+      stp_mode: StpMode.ExpireMaker,
+      ttl_units: 0,
+    };
+
+    const h1 = encodeOrder({ ...base, market_id: 1 });
+    const h2 = encodeOrder({ ...base, market_id: 2 });
+    expect(h1).not.toBe(h2);
   });
 
-  it('should encode orderType and tif', () => {
-    const buf = encodeOrder({
-      market_id: '0',
-      size: '0',
-      price: '0',
+  it('should produce different hashes for different sizes', () => {
+    const base = {
+      market_id: 1,
+      price_ticks: 500000,
       side: Side.Long,
       order_type: OrderType.Limit,
-      tif: TimeInForce.FillOrKill,
+      time_in_force: TimeInForce.GoodTillCancelled,
       post_only: false,
       reduce_only: false,
       stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
-    });
-    expect(buf[41]).toBe(OrderType.Limit);
-    expect(buf[42]).toBe(TimeInForce.FillOrKill);
+      ttl_units: 0,
+    };
+
+    const h1 = encodeOrder({ ...base, size_steps: 100 });
+    const h2 = encodeOrder({ ...base, size_steps: 200 });
+    expect(h1).not.toBe(h2);
   });
 
-  it('should encode expiry in last 4 bytes', () => {
-    const expiry = 1700000000;
-    const buf = encodeOrder({
-      market_id: '0',
-      size: '0',
-      price: '0',
+  it('should produce deterministic hashes', () => {
+    const params = {
+      market_id: 1,
+      size_steps: 100,
+      price_ticks: 500000,
       side: Side.Long,
       order_type: OrderType.Limit,
-      tif: TimeInForce.GoodTillTime,
+      time_in_force: TimeInForce.GoodTillCancelled,
       post_only: false,
       reduce_only: false,
-      stp_mode: StpMode.ExpireMaker,
-      expiry,
-    });
-    const view = new DataView(buf.buffer);
-    expect(view.getUint32(43)).toBe(expiry);
-  });
-
-  it('should encode size and price as uint128', () => {
-    const size = BigInt('1000000000000000000'); // 1e18
-    const price = BigInt('50000000000000000000000'); // 50000e18
-    const buf = encodeOrder({
-      market_id: '0',
-      size: size.toString(),
-      price: price.toString(),
-      side: Side.Long,
-      order_type: OrderType.Market,
-      tif: TimeInForce.ImmediateOrCancel,
-      post_only: false,
-      reduce_only: false,
-      stp_mode: StpMode.ExpireMaker,
-      expiry: 0,
-    });
-
-    // Extract size from bytes 8-24
-    const sizeHex = Array.from(buf.slice(8, 24)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    expect(BigInt('0x' + sizeHex)).toBe(size);
-
-    // Extract price from bytes 24-40
-    const priceHex = Array.from(buf.slice(24, 40)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    expect(BigInt('0x' + priceHex)).toBe(price);
+      stp_mode: StpMode.None,
+      ttl_units: 0,
+    };
+    expect(encodeOrder(params)).toBe(encodeOrder(params));
   });
 });
 
 describe('encodeCancelOrder', () => {
-  it('should produce valid ABI-encoded bytes32', () => {
-    const buf = encodeCancelOrder({
-      market_id: '1',
+  it('should return a bytes32 hash string', () => {
+    const hash = encodeCancelOrder({
+      market_id: 1,
       order_id: '12345',
     });
-    // ABI-encoded bytes32 is 32 bytes
-    expect(buf.length).toBe(32);
+    expect(hash).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
-  it('should embed marketId in upper bits and orderId in lower bits', () => {
-    const marketId = '2';
-    const orderId = '999';
-    const expected = (BigInt(marketId) << 192n) | BigInt(orderId);
-    const expectedHex = '0x' + expected.toString(16).padStart(64, '0');
+  it('should produce different hashes for different orders', () => {
+    const h1 = encodeCancelOrder({ market_id: 1, order_id: '100' });
+    const h2 = encodeCancelOrder({ market_id: 1, order_id: '200' });
+    expect(h1).not.toBe(h2);
+  });
 
-    const buf = encodeCancelOrder({ market_id: marketId, order_id: orderId });
+  it('should produce different hashes for different markets', () => {
+    const h1 = encodeCancelOrder({ market_id: 1, order_id: '100' });
+    const h2 = encodeCancelOrder({ market_id: 2, order_id: '100' });
+    expect(h1).not.toBe(h2);
+  });
+});
 
-    // Decode the ABI-encoded bytes32
-    const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['bytes32'], buf);
-    expect(decoded[0]).toBe(expectedHex);
+describe('encodeCancelAll', () => {
+  it('should return a bytes32 hash string', () => {
+    const hash = encodeCancelAll(0);
+    expect(hash).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  it('should produce different hashes for different markets', () => {
+    const h1 = encodeCancelAll(0);
+    const h2 = encodeCancelAll(1);
+    expect(h1).not.toBe(h2);
   });
 });

@@ -27,8 +27,12 @@ npm run build           # dual ESM/CJS build (tsup)
 
 - ethers v6 for all signing/encoding (not viem)
 - Native fetch (Node 18+), no axios
-- All amounts are wad strings (18-decimal integers) unless noted otherwise (e.g. deposit uses plain decimal)
-- Nonce algorithm must match reference impl exactly (see `signing/nonce.ts`)
+- Prices use `price_ticks` (uint24), sizes use `size_steps` (uint32) — not WAD
+- Bitmap nonces: `nonce_anchor` + `nonce_bitmap_index` (fetched via `/v1/nonce-state/{account}`)
+- EIP-712 trading permit type is `VerifyWitness` (not `VerifySignature`)
+- Order data is 88-bit compressed with action type hashes
+- `permit_params` renamed to `permit` in all API requests
+- `target` in VerifyWitness is the `router` address (from system config)
 - Signature V values are fixed to 27/28 via `fixSignatureV`
 - Contract addresses and EIP-712 domain are fetched at runtime via `init()`
 
@@ -37,6 +41,7 @@ npm run build           # dual ESM/CJS build (tsup)
 - Testnet: `https://api.testnet.rise.trade`
 - System config: `GET /v1/system/config` (has contract addresses)
 - EIP-712 domain: `GET /v1/auth/eip712-domain`
+- Nonce state: `GET /v1/nonce-state/{account}`
 
 ## Git
 

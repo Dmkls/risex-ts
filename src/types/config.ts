@@ -7,6 +7,13 @@ export interface Eip712Domain {
 
 export interface SystemConfig {
   addresses: {
+    router?: string;
+    auth?: string;
+    orders_manager?: string;
+    perps_manager?: string;
+    collateral_manager?: string;
+    usdc?: string;
+    deposit?: string;
     perp_v2?: {
       orders_manager?: string;
       [key: string]: unknown;
@@ -37,8 +44,10 @@ export interface ClientOptions {
 }
 
 export interface ExchangeClientOptions extends ClientOptions {
-  /** Main wallet private key (hex, with or without 0x prefix) */
-  accountKey: string;
+  /** Account address (hex). Required unless accountKey is provided. */
+  account?: string;
+  /** Main wallet private key (hex, with or without 0x prefix). Only needed to register/revoke signers programmatically. */
+  accountKey?: string;
   /** Signer/session key private key (hex, with or without 0x prefix) */
   signerKey: string;
 }

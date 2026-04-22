@@ -27,7 +27,7 @@ describe.skipIf(!RUN)('WebSocketClient integration', () => {
     try {
       await ws.connect();
     } catch {
-      // WS endpoint may not be available on testnet - skip
+      // WS endpoint may not be available - skip
       console.log('WS connection failed, skipping test');
       return;
     }

@@ -1,24 +1,33 @@
 import { ethers } from 'ethers';
-import { VERIFY_SIGNATURE_TYPES } from './domain.js';
-import { createNonce } from './nonce.js';
+import { VERIFY_WITNESS_TYPES } from './domain.js';
 import { fixSignatureV } from './signer.js';
-import type { PermitParams } from '../types/auth.js';
+import type { PermitParams, NonceState } from '../types/auth.js';
 import type { Eip712Domain } from '../types/config.js';
 
 /**
- * Create permit params by signing the hash of encoded contract data.
+ * Convert a hex signature string to base64.
+ */
+function hexToBase64(hex: string): string {
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const bytes = Buffer.from(clean, 'hex');
+  return bytes.toString('base64');
+}
+
+/**
+ * Create permit params by signing a precomputed hash with VerifyWitness.
  */
 export async function createPermitParams(
-  encodedData: Uint8Array,
+  hash: string,
   signerWallet: ethers.Wallet,
   account: string,
   target: string,
   domain: Eip712Domain,
+  nonceState: NonceState,
   deadlineSeconds?: number,
 ): Promise<PermitParams> {
-  const hash = ethers.keccak256(encodedData);
-  const nonce = createNonce(account);
   const deadline = Math.floor(Date.now() / 1000) + (deadlineSeconds ?? 300);
+  const nonceAnchor = Number(nonceState.nonce_anchor);
+  const nonceBitmapIndex = nonceState.current_bitmap_index;
 
   const ethDomain = {
     name: domain.name,
@@ -27,12 +36,13 @@ export async function createPermitParams(
     verifyingContract: domain.verifyingContract,
   };
 
-  const signature = fixSignatureV(
-    await signerWallet.signTypedData(ethDomain, VERIFY_SIGNATURE_TYPES, {
+  const rawSig = fixSignatureV(
+    await signerWallet.signTypedData(ethDomain, VERIFY_WITNESS_TYPES, {
       account,
       target,
       hash,
-      nonce,
+      nonceAnchor,
+      nonceBitmap: nonceBitmapIndex,
       deadline,
     }),
   );
@@ -40,8 +50,9 @@ export async function createPermitParams(
   return {
     account,
     signer: signerWallet.address,
-    nonce,
-    deadline: String(deadline),
-    signature,
+    nonce_anchor: nonceAnchor,
+    nonce_bitmap_index: nonceBitmapIndex,
+    deadline,
+    signature: hexToBase64(rawSig),
   };
 }

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { InfoClient, formatWad } from '../src/index.js';
+import { InfoClient } from '../src/index.js';
 
 async function main() {
   const client = new InfoClient({
@@ -22,12 +22,10 @@ async function main() {
     console.log('Asks:', (book.asks || []).slice(0, 3).map((a) => `${a.price} x ${a.quantity}`).join('  '));
   }
 
-  // Balance (if account provided)
-  const account = process.env.ACCOUNT_ADDRESS;
-  if (account) {
-    const balance = await client.getBalance(account);
-    console.log(`\nBalance: ${formatWad(balance)} USDC`);
-  }
+  // Nonce state
+  const account = process.env.ACCOUNT_ADDRESS ?? '0x39f810de204C07eD6294562Df3c40696644fa5bf';
+  const nonce = await client.getNonceState(account);
+  console.log(`\nNonce state: anchor=${nonce.nonce_anchor}, index=${nonce.current_bitmap_index}`);
 }
 
 main().catch(console.error);

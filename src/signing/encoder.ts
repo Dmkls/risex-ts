@@ -1,91 +1,138 @@
 import { ethers } from 'ethers';
+import { ACTION_PLACE_ORDER, ACTION_CANCEL_ORDER, ACTION_CANCEL_ALL_ORDERS } from '../utils/constants.js';
 import type { OrderParams, CancelParams } from '../types/order.js';
 
+const ACTION_PLACE_ORDER_HASH = ethers.keccak256(ethers.toUtf8Bytes(ACTION_PLACE_ORDER));
+const ACTION_CANCEL_ORDER_HASH = ethers.keccak256(ethers.toUtf8Bytes(ACTION_CANCEL_ORDER));
+const ACTION_CANCEL_ALL_ORDERS_HASH = ethers.keccak256(ethers.toUtf8Bytes(ACTION_CANCEL_ALL_ORDERS));
+
+// Protocol header flags
+const V3_FLAG_PERMIT = 0x01;
+const V3_FLAG_BUILDER = 0x02;
+const V3_FLAG_CLIENT_ID = 0x04;
+const V3_FLAG_TTL = 0x10;
+
 /**
- * Encode order parameters into a 47-byte packed binary format.
+ * Encode order parameters into 88-bit compressed format.
  *
- * Layout:
- *   bytes[0:8]   - marketId  (uint64)
- *   bytes[8:24]  - size      (uint128)
- *   bytes[24:40] - price     (uint128)
- *   bytes[40]    - flags     (uint8: bit0=side, bit1=postOnly, bit2=reduceOnly, bits3-4=stpMode)
- *   bytes[41]    - orderType (uint8)
- *   bytes[42]    - tif       (uint8)
- *   bytes[43:47] - expiry    (uint32)
+ * Bit layout (88 bits, big-endian):
+ *   [87:70]  marketId      (16 bits, shifted left by 70)
+ *   [69:38]  sizeSteps     (32 bits, shifted left by 38)
+ *   [37:14]  priceTicks    (24 bits, shifted left by 14)
+ *   [13:6]   order flags   (8 bits, shifted left by 6)
+ *   [5:1]    headerVersion (5 bits, always 1, shifted left by 1)
+ *   [0]      reserved      (1 bit, always 0)
  */
-export function encodeOrder(p: OrderParams): Uint8Array {
-  const buf = new Uint8Array(47);
-  const view = new DataView(buf.buffer);
+function encodeOrderData(p: OrderParams): bigint {
+  // Order flags byte: bit0=side, bit1=postOnly, bit2=reduceOnly, bits3-4=stpMode, bit5=orderType, bits6-7=timeInForce
+  let orderFlags = 0;
+  if (p.side & 1) orderFlags |= 0x01;
+  if (p.post_only) orderFlags |= 0x02;
+  if (p.reduce_only) orderFlags |= 0x04;
+  orderFlags |= (p.stp_mode & 3) << 3;
+  orderFlags |= (p.order_type & 1) << 5;
+  orderFlags |= (p.time_in_force & 3) << 6;
 
-  // marketId as uint64 big-endian
-  view.setBigUint64(0, BigInt(p.market_id));
+  const headerVersion = 1;
 
-  // size as uint128 big-endian (16 bytes)
-  const sizeHex = BigInt(p.size).toString(16).padStart(32, '0');
-  for (let i = 0; i < 16; i++) buf[8 + i] = parseInt(sizeHex.slice(i * 2, i * 2 + 2), 16);
+  let data = 0n;
+  data |= BigInt(p.market_id & 0xFFFF) << 70n;       // [87:70]
+  data |= BigInt(p.size_steps & 0xFFFFFFFF) << 38n;   // [69:38]
+  data |= BigInt(p.price_ticks & 0xFFFFFF) << 14n;    // [37:14]
+  data |= BigInt(orderFlags & 0xFF) << 6n;             // [13:6]
+  data |= BigInt((headerVersion & 0x1F) << 1);         // [5:1]
 
-  // price as uint128 big-endian (16 bytes)
-  const priceHex = BigInt(p.price).toString(16).padStart(32, '0');
-  for (let i = 0; i < 16; i++) buf[24 + i] = parseInt(priceHex.slice(i * 2, i * 2 + 2), 16);
-
-  // flags: bit0=side, bit1=postOnly, bit2=reduceOnly, bits3-4=stpMode
-  buf[40] = (p.side & 1) | (p.post_only ? 2 : 0) | (p.reduce_only ? 4 : 0) | ((p.stp_mode & 3) << 3);
-
-  // orderType, tif
-  buf[41] = p.order_type;
-  buf[42] = p.tif;
-
-  // expiry as uint32 big-endian
-  view.setUint32(43, p.expiry);
-
-  return buf;
+  return data;
 }
 
 /**
- * Encode cancel order parameters.
- * Binary layout (32 bytes): (marketId << 192) | orderId
- * Then ABI-encoded as bytes32.
+ * Compute protocol header flags based on which optional fields are present.
  */
-export function encodeCancelOrder(p: CancelParams): Uint8Array {
-  const cancelData = (BigInt(p.market_id) << 192n) | BigInt(p.order_id);
-  const hex = cancelData.toString(16).padStart(64, '0');
-  // ABI encode as bytes32
+function computeHeaderFlags(builderId: number, clientOrderId: bigint, ttlUnits: number): number {
+  let flags = V3_FLAG_PERMIT; // always set for ECDSA permits
+  if (builderId !== 0) flags |= V3_FLAG_BUILDER;
+  if (clientOrderId !== 0n) flags |= V3_FLAG_CLIENT_ID;
+  if (ttlUnits !== 0) flags |= V3_FLAG_TTL;
+  return flags;
+}
+
+/**
+ * Compute the hash for a place order action.
+ * hash = keccak256(abi.encode(actionTypeHash, headerFlags, orderData, builderID, clientOrderID, ttlUnits))
+ */
+export function encodeOrder(p: OrderParams): string {
+  const orderData = encodeOrderData(p);
+  const clientOrderId = BigInt(p.client_order_id ?? '0');
+  const headerFlags = computeHeaderFlags(p.builder_id ?? 0, clientOrderId, p.ttl_units);
+
   const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-    ['bytes32'],
-    ['0x' + hex],
+    ['bytes32', 'uint8', 'uint256', 'uint16', 'uint64', 'uint16'],
+    [
+      ACTION_PLACE_ORDER_HASH,
+      headerFlags,
+      orderData,
+      p.builder_id ?? 0,
+      clientOrderId,
+      p.ttl_units,
+    ],
   );
-  return ethers.getBytes(encoded);
+
+  return ethers.keccak256(encoded);
+}
+
+/**
+ * Compute the hash for a cancel order action.
+ * hash = keccak256(abi.encode(actionTypeHash, uint256(marketID), uint256(orderID)))
+ */
+export function encodeCancelOrder(p: CancelParams): string {
+  const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ['bytes32', 'uint256', 'uint256'],
+    [ACTION_CANCEL_ORDER_HASH, BigInt(p.market_id), BigInt(p.order_id)],
+  );
+  return ethers.keccak256(encoded);
+}
+
+/**
+ * Compute the hash for a cancel-all action.
+ * hash = keccak256(abi.encode(actionTypeHash, uint256(marketID)))
+ */
+export function encodeCancelAll(marketId: number): string {
+  const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ['bytes32', 'uint256'],
+    [ACTION_CANCEL_ALL_ORDERS_HASH, BigInt(marketId)],
+  );
+  return ethers.keccak256(encoded);
 }
 
 /**
  * Encode leverage update parameters.
  */
-export function encodeLeverage(marketId: string, leverage: bigint): Uint8Array {
+export function encodeLeverage(marketId: number, leverage: bigint): string {
   const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
     ['uint256', 'uint128'],
     [BigInt(marketId), leverage],
   );
-  return ethers.getBytes(encoded);
+  return ethers.keccak256(encoded);
 }
 
 /**
  * Encode margin mode update parameters.
  */
-export function encodeMarginMode(marketId: string, marginMode: number): Uint8Array {
+export function encodeMarginMode(marketId: number, marginMode: number): string {
   const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
     ['uint256', 'uint8'],
     [BigInt(marketId), marginMode],
   );
-  return ethers.getBytes(encoded);
+  return ethers.keccak256(encoded);
 }
 
 /**
  * Encode isolated margin update parameters.
  */
-export function encodeIsolatedMargin(marketId: string, amount: bigint): Uint8Array {
+export function encodeIsolatedMargin(marketId: number, amount: bigint): string {
   const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
     ['uint256', 'int256'],
     [BigInt(marketId), amount],
   );
-  return ethers.getBytes(encoded);
+  return ethers.keccak256(encoded);
 }
