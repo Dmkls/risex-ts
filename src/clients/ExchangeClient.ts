@@ -177,7 +177,18 @@ export class ExchangeClient {
   }
 
   async cancelOrder(params: CancelParams): Promise<CancelResponse> {
-    const hash = encodeCancelOrder(params);
+    let restingOrderId = params.resting_order_id;
+
+    if (restingOrderId == null) {
+      const openOrders = await this.info.getOpenOrders(this.account, params.market_id);
+      const match = openOrders.find((o) => o.order_id === params.order_id);
+      if (!match?.resting_order_id) {
+        throw new Error(`Could not find resting_order_id for order ${params.order_id}. Pass it explicitly or ensure the order is still open.`);
+      }
+      restingOrderId = match.resting_order_id;
+    }
+
+    const hash = encodeCancelOrder({ ...params, resting_order_id: restingOrderId });
     const permit = await this.createPermit(hash);
 
     return this.info['http'].post<CancelResponse>('/v1/orders/cancel', {

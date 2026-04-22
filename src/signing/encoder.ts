@@ -83,12 +83,18 @@ export function encodeOrder(p: OrderParams, isErc1271 = false): string {
 
 /**
  * Compute the hash for a cancel order action.
- * hash = keccak256(abi.encode(actionTypeHash, uint256(marketID), uint256(orderID)))
+ * hash = keccak256(abi.encode(actionTypeHash, uint256(marketID), uint256(restingOrderID)))
+ *
+ * The witness uses the resting_order_id (uint64) and the API market_id,
+ * NOT the composite order_id or sc_order_id.
  */
 export function encodeCancelOrder(p: CancelParams): string {
+  if (p.resting_order_id == null) {
+    throw new Error('resting_order_id is required for cancel. Fetch it from getOpenOrders().');
+  }
   const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
     ['bytes32', 'uint256', 'uint256'],
-    [ACTION_CANCEL_ORDER_HASH, BigInt(p.market_id), BigInt(p.order_id)],
+    [ACTION_CANCEL_ORDER_HASH, BigInt(p.market_id), BigInt(p.resting_order_id)],
   );
   return ethers.keccak256(encoded);
 }

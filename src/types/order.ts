@@ -18,6 +18,8 @@ export interface OrderParams {
 export interface CancelParams {
   market_id: number;
   order_id: string;
+  /** The resting_order_id (uint64) used in the permit hash. Fetched automatically if omitted. */
+  resting_order_id?: string | number;
 }
 
 export interface TpSlParams {

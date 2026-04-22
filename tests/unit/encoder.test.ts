@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { ethers } from 'ethers';
 import { encodeOrder, encodeCancelOrder, encodeCancelAll } from '../../src/signing/encoder.js';
 import { Side, OrderType, TimeInForce, StpMode } from '../../src/types/common.js';
 
@@ -94,21 +95,45 @@ describe('encodeCancelOrder', () => {
   it('should return a bytes32 hash string', () => {
     const hash = encodeCancelOrder({
       market_id: 1,
-      order_id: '12345',
+      order_id: '0x0000000000000000000000000000000000000000000000000',
+      resting_order_id: 100,
     });
     expect(hash).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
-  it('should produce different hashes for different orders', () => {
-    const h1 = encodeCancelOrder({ market_id: 1, order_id: '100' });
-    const h2 = encodeCancelOrder({ market_id: 1, order_id: '200' });
+  it('should throw without resting_order_id', () => {
+    expect(() => encodeCancelOrder({ market_id: 1, order_id: '0x00' })).toThrow('resting_order_id');
+  });
+
+  it('should produce different hashes for different resting_order_ids', () => {
+    const h1 = encodeCancelOrder({ market_id: 1, order_id: '0x00', resting_order_id: 100 });
+    const h2 = encodeCancelOrder({ market_id: 1, order_id: '0x00', resting_order_id: 200 });
     expect(h1).not.toBe(h2);
   });
 
   it('should produce different hashes for different markets', () => {
-    const h1 = encodeCancelOrder({ market_id: 1, order_id: '100' });
-    const h2 = encodeCancelOrder({ market_id: 2, order_id: '100' });
+    const h1 = encodeCancelOrder({ market_id: 1, order_id: '0x00', resting_order_id: 100 });
+    const h2 = encodeCancelOrder({ market_id: 2, order_id: '0x00', resting_order_id: 100 });
     expect(h1).not.toBe(h2);
+  });
+
+  it('should match Go backend test vector (marketID=3, restingOrderID=12345)', () => {
+    // From v3_permit_signer_test.go: marketID=3, orderID=12345
+    const hash = encodeCancelOrder({
+      market_id: 3,
+      order_id: '0x00',
+      resting_order_id: 12345,
+    });
+
+    const ACTION_HASH = ethers.keccak256(ethers.toUtf8Bytes('RISE_PERPS_CANCEL_ORDER_V1'));
+    const expected = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ['bytes32', 'uint256', 'uint256'],
+        [ACTION_HASH, 3n, 12345n],
+      ),
+    );
+
+    expect(hash).toBe(expected);
   });
 });
 
