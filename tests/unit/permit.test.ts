@@ -24,16 +24,16 @@ describe('createPermitParams', () => {
     expect(permit.nonce_bitmap_index).toBe(42);
   });
 
-  it('should advance anchor when bitmap index exceeds 208', async () => {
+  it('should advance anchor when bitmap index exceeds 207', async () => {
     const permit = await createPermitParams(
       TEST_HASH, TEST_WALLET, TEST_ACCOUNT, TEST_TARGET, TEST_DOMAIN,
-      { nonce_anchor: '10', current_bitmap_index: 209 },
+      { nonce_anchor: '10', current_bitmap_index: 208 },
     );
     expect(permit.nonce_anchor).toBe(11);
     expect(permit.nonce_bitmap_index).toBe(0);
   });
 
-  it('should advance anchor for any index above 208', async () => {
+  it('should advance anchor for any index above 207', async () => {
     const permit = await createPermitParams(
       TEST_HASH, TEST_WALLET, TEST_ACCOUNT, TEST_TARGET, TEST_DOMAIN,
       { nonce_anchor: '10', current_bitmap_index: 999 },
@@ -42,12 +42,12 @@ describe('createPermitParams', () => {
     expect(permit.nonce_bitmap_index).toBe(0);
   });
 
-  it('should NOT advance anchor at max valid index 208', async () => {
+  it('should NOT advance anchor at max valid index 207', async () => {
     const permit = await createPermitParams(
       TEST_HASH, TEST_WALLET, TEST_ACCOUNT, TEST_TARGET, TEST_DOMAIN,
-      { nonce_anchor: '10', current_bitmap_index: 208 },
+      { nonce_anchor: '10', current_bitmap_index: 207 },
     );
     expect(permit.nonce_anchor).toBe(10);
-    expect(permit.nonce_bitmap_index).toBe(208);
+    expect(permit.nonce_bitmap_index).toBe(207);
   });
 });

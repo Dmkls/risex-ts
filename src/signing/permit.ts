@@ -14,7 +14,7 @@ function hexToBase64(hex: string): string {
 }
 
 /** Maximum bitmap index before the anchor must advance. */
-const MAX_BITMAP_INDEX = 208;
+const MAX_BITMAP_INDEX = 207;
 
 export async function createPermitParams(
   hash: string,
