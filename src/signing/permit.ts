@@ -13,8 +13,8 @@ function hexToBase64(hex: string): string {
   return bytes.toString('base64');
 }
 
-/** Maximum bitmap index before the anchor must advance (uint8, 0-255). */
-const MAX_BITMAP_INDEX = 255;
+/** Maximum bitmap index before the anchor must advance. */
+const MAX_BITMAP_INDEX = 208;
 
 export async function createPermitParams(
   hash: string,
