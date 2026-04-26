@@ -13,9 +13,9 @@ function hexToBase64(hex: string): string {
   return bytes.toString('base64');
 }
 
-/**
- * Create permit params by signing a precomputed hash with VerifyWitness.
- */
+/** Maximum bitmap index before the anchor must advance (uint8, 0-255). */
+const MAX_BITMAP_INDEX = 255;
+
 export async function createPermitParams(
   hash: string,
   signerWallet: ethers.Wallet,
@@ -27,8 +27,14 @@ export async function createPermitParams(
   isErc1271 = false,
 ): Promise<PermitParams> {
   const deadline = Math.floor(Date.now() / 1000) + (deadlineSeconds ?? 300);
-  const nonceAnchor = Number(nonceState.nonce_anchor);
-  const nonceBitmapIndex = nonceState.current_bitmap_index;
+
+  // When the bitmap is exhausted, advance the anchor and reset the index.
+  let nonceAnchor = Number(nonceState.nonce_anchor);
+  let nonceBitmapIndex = nonceState.current_bitmap_index;
+  if (nonceBitmapIndex > MAX_BITMAP_INDEX) {
+    nonceAnchor += 1;
+    nonceBitmapIndex = 0;
+  }
 
   const ethDomain = {
     name: domain.name,

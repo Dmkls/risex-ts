@@ -1,5 +1,7 @@
 # RISEx Client
 
+> **Unofficial, not production ready.** This is a community SDK and is not maintained or endorsed by the RISEx team. Use at your own risk.
+
 TypeScript SDK for [RISEx](https://rise.trade), a fully onchain CLOB perpetuals DEX on RISE Chain (Ethereum L2).
 
 ```ts
