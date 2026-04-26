@@ -1,4 +1,5 @@
 import type { Side, OrderType, TimeInForce, StpMode } from './common.js';
+import type { NonceState } from './auth.js';
 
 export interface OrderParams {
   market_id: number;
@@ -13,6 +14,8 @@ export interface OrderParams {
   ttl_units: number;
   client_order_id?: string;
   builder_id?: number;
+  /** Override nonce state instead of fetching from the API. */
+  nonce?: NonceState;
 }
 
 export interface CancelParams {
@@ -20,6 +23,8 @@ export interface CancelParams {
   order_id: string;
   /** The resting_order_id (uint64) used in the permit hash. Fetched automatically if omitted. */
   resting_order_id?: string | number;
+  /** Override nonce state instead of fetching from the API. */
+  nonce?: NonceState;
 }
 
 export interface TpSlParams {

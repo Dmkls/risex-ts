@@ -140,9 +140,9 @@ export class ExchangeClient {
 
   // ── Orders ──────────────────────────────────────────────
 
-  private async createPermit(hash: string): Promise<PermitParams> {
+  private async createPermit(hash: string, nonce?: NonceState): Promise<PermitParams> {
     this.assertInit();
-    const nonceState = await this.getNonceState();
+    const nonceState = nonce ?? await this.getNonceState();
     return createPermitParams(
       hash,
       this.signerWallet,
@@ -157,7 +157,7 @@ export class ExchangeClient {
 
   async placeOrder(orderParams: OrderParams): Promise<OrderResponse> {
     const hash = encodeOrder(orderParams, this.isErc1271);
-    const permit = await this.createPermit(hash);
+    const permit = await this.createPermit(hash, orderParams.nonce);
 
     return this.info['http'].post<OrderResponse>('/v1/orders/place', {
       market_id: orderParams.market_id,
@@ -189,7 +189,7 @@ export class ExchangeClient {
     }
 
     const hash = encodeCancelOrder({ ...params, resting_order_id: restingOrderId });
-    const permit = await this.createPermit(hash);
+    const permit = await this.createPermit(hash, params.nonce);
 
     return this.info['http'].post<CancelResponse>('/v1/orders/cancel', {
       market_id: params.market_id,
@@ -198,9 +198,9 @@ export class ExchangeClient {
     });
   }
 
-  async cancelAllOrders(marketId = 0): Promise<CancelAllResponse> {
+  async cancelAllOrders(marketId = 0, nonce?: NonceState): Promise<CancelAllResponse> {
     const hash = encodeCancelAll(marketId);
-    const permit = await this.createPermit(hash);
+    const permit = await this.createPermit(hash, nonce);
 
     return this.info['http'].post<CancelAllResponse>('/v1/orders/cancel-all', {
       market_id: marketId,
@@ -305,9 +305,9 @@ export class ExchangeClient {
     });
   }
 
-  async updateLeverage(marketId: number, leverage: bigint): Promise<unknown> {
+  async updateLeverage(marketId: number, leverage: bigint, nonce?: NonceState): Promise<unknown> {
     const hash = encodeLeverage(marketId, leverage);
-    const permit = await this.createPermit(hash);
+    const permit = await this.createPermit(hash, nonce);
 
     return this.info['http'].post('/v1/account/leverage', {
       market_id: marketId,
@@ -316,9 +316,9 @@ export class ExchangeClient {
     });
   }
 
-  async updateMarginMode(marketId: number, mode: MarginMode): Promise<unknown> {
+  async updateMarginMode(marketId: number, mode: MarginMode, nonce?: NonceState): Promise<unknown> {
     const hash = encodeMarginMode(marketId, mode);
-    const permit = await this.createPermit(hash);
+    const permit = await this.createPermit(hash, nonce);
 
     return this.info['http'].post('/v1/account/margin-mode', {
       market_id: marketId,
@@ -327,9 +327,9 @@ export class ExchangeClient {
     });
   }
 
-  async updateIsolatedMargin(marketId: number, amount: bigint): Promise<unknown> {
+  async updateIsolatedMargin(marketId: number, amount: bigint, nonce?: NonceState): Promise<unknown> {
     const hash = encodeIsolatedMargin(marketId, amount);
-    const permit = await this.createPermit(hash);
+    const permit = await this.createPermit(hash, nonce);
 
     return this.info['http'].post('/v1/account/isolated-margin', {
       market_id: marketId,
