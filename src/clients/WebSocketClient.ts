@@ -130,7 +130,12 @@ export class WebSocketClient extends EventEmitter {
 
   unsubscribe(sub: WsSubscription): void {
     this.subscriptions = this.subscriptions.filter(
-      (s) => !(s.channel === sub.channel && JSON.stringify(s.market_ids) === JSON.stringify(sub.market_ids) && s.account === sub.account),
+      (s) =>
+        !(
+          s.channel === sub.channel &&
+          JSON.stringify(s.market_ids) === JSON.stringify(sub.market_ids) &&
+          JSON.stringify(s.makers) === JSON.stringify(sub.makers)
+        ),
     );
     if (this.connected) this.sendSubscription('unsubscribe', sub);
   }
@@ -151,7 +156,17 @@ export class WebSocketClient extends EventEmitter {
     this.handlers.get(channel)?.delete(handler);
   }
 
-  /** Send an auth message for private channel access (orders, positions, fills). */
+  /**
+   * Send an auth message for private channel access (orders, positions, fills).
+   *
+   * The server only accepts subscribes on private channels after it sends the
+   * `Authentication successful` ack. This method is fire-and-forget — callers
+   * must wait for that ack (via the `'message'` listener) before calling
+   * `subscribe()` on a private channel. The SDK also does not re-authenticate
+   * automatically on reconnect; if you rely on private channels you must
+   * listen for `'open'` and re-send `authenticate()` yourself before the
+   * stored subscriptions are flushed.
+   */
   authenticate(params: WsAuthParams): void {
     this.send(JSON.stringify({ method: 'auth', params }));
   }
@@ -215,7 +230,7 @@ export class WebSocketClient extends EventEmitter {
       channel: sub.channel,
     };
     if (sub.market_ids !== undefined) params.market_ids = sub.market_ids;
-    if (sub.account) params.account = sub.account;
+    if (sub.makers !== undefined && sub.makers.length > 0) params.makers = sub.makers;
 
     const payload = {
       method: action,

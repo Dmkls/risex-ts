@@ -5,7 +5,7 @@
 TypeScript SDK for [RISEx](https://rise.trade), a fully onchain CLOB perpetuals DEX on RISE Chain (Ethereum L2).
 
 ```ts
-import { ExchangeClient } from 'risex-ts';
+import { ExchangeClient } from 'risex-client';
 
 const client = new ExchangeClient({
   account: process.env.ACCOUNT_ADDRESS,
@@ -21,7 +21,7 @@ console.log('Order:', order.order_id, 'tx:', order.tx_hash);
 ## Install
 
 ```bash
-npm install risex-ts
+npm install risex-client
 ```
 
 Requires **Node 18+**. No peer dependencies.
@@ -52,7 +52,7 @@ SIGNER_PRIVATE_KEY=0x...
 ### Read-only: fetch markets and orderbook
 
 ```ts
-import { InfoClient } from 'risex-ts';
+import { InfoClient } from 'risex-client';
 
 const info = new InfoClient();
 
@@ -69,7 +69,7 @@ console.log('Best ask:', book.asks[0]?.price);
 ### Trading: place and close a position
 
 ```ts
-import { ExchangeClient } from 'risex-ts';
+import { ExchangeClient } from 'risex-client';
 
 const client = new ExchangeClient({
   account: process.env.ACCOUNT_ADDRESS,
@@ -96,7 +96,7 @@ await client.closePosition(2);
 ### WebSocket: stream orderbook updates
 
 ```ts
-import { WebSocketClient } from 'risex-ts';
+import { WebSocketClient } from 'risex-client';
 
 const ws = new WebSocketClient();
 
@@ -267,7 +267,7 @@ ws.disconnect()
 ### Enums
 
 ```ts
-import { Side, OrderType, TimeInForce, StpMode, MarginMode } from 'risex-ts';
+import { Side, OrderType, TimeInForce, StpMode, MarginMode } from 'risex-client';
 
 Side.Long         // 0
 Side.Short        // 1
@@ -283,7 +283,7 @@ MarginMode.Isolated // 1
 ### Errors
 
 ```ts
-import { RiseApiError, RiseRateLimitError } from 'risex-ts';
+import { RiseApiError, RiseRateLimitError } from 'risex-client';
 
 try {
   await client.marketBuy(2, 1);
@@ -312,7 +312,7 @@ import {
   fixSignatureV,
   REGISTER_SIGNER_TYPES,
   VERIFY_WITNESS_TYPES,
-} from 'risex-ts';
+} from 'risex-client';
 ```
 
 ## Defaults and sharp edges

@@ -1,3 +1,18 @@
+/**
+ * Channels the WS gateway accepts on `subscribe`. The server rejects any other
+ * value with `"invalid channel: <name>"`.
+ *
+ * Public (no auth required): `orderbook`, `trades`, `orders`, `positions`,
+ * `oracle`, `funding`.
+ *
+ * Private (server returns `"authentication required for <name> channel"` until
+ * `authenticate()` succeeds): `fills`, `account`.
+ *
+ * Note: the `funding` channel is currently silent on testnet — it acks the
+ * subscribe but does not emit any messages. Tracked separately; the channel
+ * name is correct and the SDK exposes it so consumers can subscribe once the
+ * backend starts publishing.
+ */
 export type WsChannel =
   | 'orderbook'
   | 'trades'
@@ -6,13 +21,19 @@ export type WsChannel =
   | 'fills'
   | 'account'
   | 'oracle'
-  | 'ticker';
+  | 'funding';
 
 export interface WsSubscription {
   channel: WsChannel;
-  /** Array of market IDs to subscribe to. Omit to subscribe to all markets. */
+  /** Market IDs to subscribe to. Omit to subscribe to all markets. */
   market_ids?: number[];
-  account?: string;
+  /**
+   * Maker addresses to filter by. For private channels (`orders`, `positions`,
+   * `funding`) the server auto-fills this with the authenticated account if
+   * omitted — you usually don't need to set it. For `fills` and `account` the
+   * server ignores any value here and always pins to the authenticated account.
+   */
+  makers?: string[];
 }
 
 export interface WsMessage {

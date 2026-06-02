@@ -65,16 +65,19 @@ async function main() {
   console.log(`\nAuth: nonce=${nonce}, message="${message}"`);
   ws.authenticate({ account, signer: account, message, nonce, expiration, signature });
 
-  // Wait for auth, then subscribe to private channels
+  // Wait for auth ack, then subscribe to private channels. The server
+  // auto-fills `makers` with the authenticated account for private channels,
+  // so we don't need to send it. `fills` has no snapshot — it stays silent
+  // until a fill actually happens.
   setTimeout(() => {
     console.log('\nSubscribing to fills...');
-    ws.subscribe({ channel: 'fills', account });
+    ws.subscribe({ channel: 'fills' });
 
     console.log('Subscribing to orders...');
-    ws.subscribe({ channel: 'orders', market_ids: [1], account });
+    ws.subscribe({ channel: 'orders', market_ids: [1] });
 
     console.log('Subscribing to positions...\n');
-    ws.subscribe({ channel: 'positions', market_ids: [1], account });
+    ws.subscribe({ channel: 'positions', market_ids: [1] });
   }, 2000);
 
   setTimeout(() => {
